@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:book/features/auth/logic/auth_cubit.dart';
 import 'package:book/core/routing/routes.dart';
+import 'package:book/core/theming/app_colors.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -45,7 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(context.tr('anonymous_login_success')),
-            backgroundColor: const Color(0xFF8B4513),
+            backgroundColor: AppColors.primary,
           ),
         );
         context.pushReplacementNamed(Routes.homeScreen);
@@ -69,19 +70,19 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F1E8),
+      backgroundColor: AppColors.background,
       body: BlocConsumer<AuthCubit, AuthState>(
         listener: (context, state) {
           if (state is AuthLoginSuccess) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(context.tr('login_success')),
-                backgroundColor: const Color(0xFF8B4513),
+                backgroundColor: AppColors.primary,
               ),
             );
-            if(state.response.role == "user"){
+            if (state.response.role == "user") {
               context.pushReplacementNamed(Routes.homeScreen);
-            }else{
+            } else {
               context.pushReplacementNamed(Routes.dashboardScreen);
             }
           } else if (state is AuthError) {
@@ -107,10 +108,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       // Header
                       AuthHeader(
-                        icon: Icons.menu_book_rounded,
+                        imageAssetPath: 'assets/images/app_logo.png',
                         titleKey: context.tr('welcome_back'),
                         subtitleKey: context.tr('login_subtitle'),
-                        iconBackgroundColor: const Color(0xFF8B4513),
+                        iconBackgroundColor: AppColors.primary,
                       ),
                       const SizedBox(height: 32),
 
@@ -141,7 +142,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         suffixIcon: PasswordVisibilityIcon(
                           obscureText: _obscurePassword,
                           onPressed: () {
-                            setState(() => _obscurePassword = !_obscurePassword);
+                            setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            );
                           },
                         ),
                         validator: (value) {
@@ -177,7 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       // Login Button
                       CustomAuthButton(
                         textKey: context.tr('login'),
-                        backgroundColor: const Color(0xFF8B4513),
+                        backgroundColor: AppColors.primary,
                         isLoading: isLoading,
                         onPressed: () {
                           if (_formKey.currentState!.validate()) {

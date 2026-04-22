@@ -1,6 +1,8 @@
 // Anonymous Login Button
 import 'package:flutter/material.dart';
 
+import '../../../../core/theming/app_colors.dart';
+
 class AnonymousLoginButton extends StatelessWidget {
   final VoidCallback onPressed;
   final bool isLoading;
@@ -18,37 +20,35 @@ class AnonymousLoginButton extends StatelessWidget {
       height: 56,
       child: OutlinedButton.icon(
         onPressed: isLoading ? null : onPressed,
-        icon: isLoading
-            ? const SizedBox(
-          height: 20,
-          width: 20,
-          child: CircularProgressIndicator(
-            color: Color(0xFF8B4513),
-            strokeWidth: 2,
-          ),
-        )
-            : const Icon(
-          Icons.person_outline,
-          color: Color(0xFF8B4513),
-          size: 24,
-        ),
+        icon:
+            isLoading
+                ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                    color: AppColors.primary,
+                    strokeWidth: 2,
+                  ),
+                )
+                : const Icon(
+                  Icons.person_outline,
+                  color: AppColors.primary,
+                  size: 24,
+                ),
         label: Text(
           isLoading ? '...' : '',
           style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF5D4037),
+            color: AppColors.textPrimary,
           ),
         ),
         style: OutlinedButton.styleFrom(
-          side: const BorderSide(
-            color: Color(0xFF8B4513),
-            width: 2,
-          ),
+          side: const BorderSide(color: AppColors.primary, width: 2),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          backgroundColor: Colors.white,
+          backgroundColor: AppColors.surface,
         ),
       ),
     );

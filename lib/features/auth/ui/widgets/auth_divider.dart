@@ -1,6 +1,7 @@
-
 // Auth Divider with Text
 import 'package:flutter/material.dart';
+
+import '../../../../core/theming/app_colors.dart';
 
 class AuthDivider extends StatelessWidget {
   final String textKey;
@@ -13,7 +14,7 @@ class AuthDivider extends StatelessWidget {
       children: [
         Expanded(
           child: Divider(
-            color: const Color(0xFF5D4037).withOpacity(0.3),
+            color: AppColors.primary.withValues(alpha: 0.22),
             thickness: 1,
           ),
         ),
@@ -22,14 +23,14 @@ class AuthDivider extends StatelessWidget {
           child: Text(
             textKey,
             style: TextStyle(
-              color: const Color(0xFF5D4037).withOpacity(0.7),
+              color: AppColors.textSecondary.withValues(alpha: 0.9),
               fontWeight: FontWeight.w500,
             ),
           ),
         ),
         Expanded(
           child: Divider(
-            color: const Color(0xFF5D4037).withOpacity(0.3),
+            color: AppColors.primary.withValues(alpha: 0.22),
             thickness: 1,
           ),
         ),

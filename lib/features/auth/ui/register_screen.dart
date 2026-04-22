@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:book/features/auth/logic/auth_cubit.dart';
 import 'package:book/core/routing/routes.dart';
+import 'package:book/core/theming/app_colors.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({Key? key}) : super(key: key);
@@ -51,7 +52,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(context.tr('anonymous_login_success')),
-            backgroundColor: const Color(0xFF8B4513),
+            backgroundColor: AppColors.primary,
           ),
         );
         context.pushReplacementNamed(Routes.homeScreen);
@@ -75,14 +76,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F1E8),
+      backgroundColor: AppColors.background,
       body: BlocConsumer<AuthCubit, AuthState>(
         listener: (context, state) {
           if (state is AuthRegisterSuccess) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(context.tr('register_success')),
-                backgroundColor: const Color(0xFF8B4513),
+                backgroundColor: AppColors.primary,
               ),
             );
             Navigator.pop(context);
@@ -109,10 +110,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     children: [
                       // Header
                       AuthHeader(
-                        icon: Icons.person_add_rounded,
+                        imageAssetPath: 'assets/images/app_logo.png',
                         titleKey: context.tr('create_account'),
                         subtitleKey: context.tr('register_subtitle'),
-                        iconBackgroundColor: const Color(0xFF6D4C41),
+                        iconBackgroundColor: AppColors.primary,
                       ),
                       const SizedBox(height: 32),
 
@@ -160,7 +161,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         suffixIcon: PasswordVisibilityIcon(
                           obscureText: _obscurePassword,
                           onPressed: () {
-                            setState(() => _obscurePassword = !_obscurePassword);
+                            setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            );
                           },
                         ),
                         validator: (value) {
@@ -184,8 +187,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         suffixIcon: PasswordVisibilityIcon(
                           obscureText: _obscureConfirmPassword,
                           onPressed: () {
-                            setState(() =>
-                            _obscureConfirmPassword = !_obscureConfirmPassword);
+                            setState(
+                              () =>
+                                  _obscureConfirmPassword =
+                                      !_obscureConfirmPassword,
+                            );
                           },
                         ),
                         validator: (value) {
@@ -216,12 +222,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             labelText: context.tr('account_type'),
                             prefixIcon: const Icon(
                               Icons.admin_panel_settings_outlined,
-                              color: Color(0xFF8B4513),
+                              color: AppColors.primary,
                             ),
                             border: InputBorder.none,
                           ),
-                          dropdownColor: Colors.white,
-                          style: const TextStyle(color: Color(0xFF5D4037)),
+                          dropdownColor: AppColors.surface,
+                          style: const TextStyle(color: AppColors.textPrimary),
                           items: [
                             DropdownMenuItem(
                               value: 'user',
@@ -242,7 +248,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       // Register Button
                       CustomAuthButton(
                         textKey: context.tr('create_account_button'),
-                        backgroundColor: const Color(0xFF6D4C41),
+                        backgroundColor: AppColors.primary,
                         isLoading: isLoading,
                         onPressed: () {
                           if (_formKey.currentState!.validate()) {

@@ -1,6 +1,8 @@
 // Auth Navigation Text
 import 'package:flutter/material.dart';
 
+import '../../../../core/theming/app_colors.dart';
+
 class AuthNavigationText extends StatelessWidget {
   final String questionKey;
   final String actionKey;
@@ -21,7 +23,7 @@ class AuthNavigationText extends StatelessWidget {
         Text(
           questionKey,
           style: TextStyle(
-            color: const Color(0xFF5D4037).withOpacity(0.7),
+            color: AppColors.textSecondary.withValues(alpha: 0.9),
           ),
         ),
         TextButton(
@@ -29,7 +31,7 @@ class AuthNavigationText extends StatelessWidget {
           child: Text(
             actionKey,
             style: const TextStyle(
-              color: Color(0xFF8B4513),
+              color: AppColors.secondary,
               fontWeight: FontWeight.bold,
             ),
           ),

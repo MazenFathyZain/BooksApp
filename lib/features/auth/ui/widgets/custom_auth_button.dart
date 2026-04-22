@@ -1,6 +1,8 @@
 // Custom Auth Button
 import 'package:flutter/material.dart';
 
+import '../../../../core/theming/app_colors.dart';
+
 class CustomAuthButton extends StatelessWidget {
   final String textKey;
   final VoidCallback? onPressed;
@@ -23,29 +25,30 @@ class CustomAuthButton extends StatelessWidget {
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: backgroundColor ?? const Color(0xFF8B4513),
-          foregroundColor: Colors.white,
+          backgroundColor: backgroundColor ?? AppColors.primary,
+          foregroundColor: AppColors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          elevation: 3,
+          elevation: 0,
         ),
-        child: isLoading
-            ? const SizedBox(
-          height: 24,
-          width: 24,
-          child: CircularProgressIndicator(
-            color: Colors.white,
-            strokeWidth: 2,
-          ),
-        )
-            : Text(
-          textKey,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        child:
+            isLoading
+                ? const SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: CircularProgressIndicator(
+                    color: AppColors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+                : Text(
+                  textKey,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
       ),
     );
   }

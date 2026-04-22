@@ -1,6 +1,8 @@
 // Password Visibility Toggle Icon
 import 'package:flutter/material.dart';
 
+import '../../../../core/theming/app_colors.dart';
+
 class PasswordVisibilityIcon extends StatelessWidget {
   final bool obscureText;
   final VoidCallback onPressed;
@@ -16,10 +18,9 @@ class PasswordVisibilityIcon extends StatelessWidget {
     return IconButton(
       icon: Icon(
         obscureText ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-        color: const Color(0xFF8B4513),
+        color: AppColors.primary,
       ),
       onPressed: onPressed,
     );
   }
 }
-
