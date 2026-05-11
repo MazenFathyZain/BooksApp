@@ -9,11 +9,12 @@ import 'package:book/features/auth/ui/widgets/password_visibility_toggle_icon.da
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:book/features/auth/logic/auth_cubit.dart';
+import 'package:book/core/helpers/session_helper.dart';
 import 'package:book/core/routing/routes.dart';
 import 'package:book/core/theming/app_colors.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+  const LoginScreen({super.key});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -37,10 +38,8 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isAnonymousLoading = true);
 
     try {
-      // Implement your anonymous login logic here
-      // Example: await context.read<AuthCubit>().anonymousLogin();
-
       await Future.delayed(const Duration(seconds: 1)); // Simulate API call
+      await clearSession();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -49,7 +48,10 @@ class _LoginScreenState extends State<LoginScreen> {
             backgroundColor: AppColors.primary,
           ),
         );
-        context.pushReplacementNamed(Routes.homeScreen);
+        context.pushNamedAndRemoveUntil(
+          Routes.homeScreen,
+          predicate: (route) => false,
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -80,11 +82,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 backgroundColor: AppColors.primary,
               ),
             );
-            if (state.response.role == "user") {
-              context.pushReplacementNamed(Routes.homeScreen);
-            } else {
-              context.pushReplacementNamed(Routes.dashboardScreen);
-            }
+            context.pushNamedAndRemoveUntil(
+              Routes.homeScreen,
+              predicate: (route) => false,
+            );
           } else if (state is AuthError) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(

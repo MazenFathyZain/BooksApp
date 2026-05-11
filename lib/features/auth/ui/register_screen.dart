@@ -9,11 +9,12 @@ import 'package:book/features/auth/ui/widgets/password_visibility_toggle_icon.da
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:book/features/auth/logic/auth_cubit.dart';
+import 'package:book/core/helpers/session_helper.dart';
 import 'package:book/core/routing/routes.dart';
 import 'package:book/core/theming/app_colors.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({Key? key}) : super(key: key);
+  const RegisterScreen({super.key});
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -43,10 +44,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isAnonymousLoading = true);
 
     try {
-      // Implement your anonymous login logic here
-      // Example: await context.read<AuthCubit>().anonymousLogin();
-
       await Future.delayed(const Duration(seconds: 1)); // Simulate API call
+      await clearSession();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -55,7 +54,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
             backgroundColor: AppColors.primary,
           ),
         );
-        context.pushReplacementNamed(Routes.homeScreen);
+        context.pushNamedAndRemoveUntil(
+          Routes.homeScreen,
+          predicate: (route) => false,
+        );
       }
     } catch (e) {
       if (mounted) {

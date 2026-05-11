@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/di/dependency_injection.dart';
-import 'core/helpers/constants.dart';
 import 'core/localization/app_localizations.dart';
 import 'core/localization/localization_cubit.dart';
 import 'core/routing/app_router.dart';
@@ -136,10 +135,7 @@ class BookApp extends StatelessWidget {
                 ),
               ),
             ),
-            initialRoute:
-                isLoggedInUser
-                    ? (isAdmin ? Routes.dashboardScreen : Routes.homeScreen)
-                    : Routes.loginScreen,
+            initialRoute: Routes.homeScreen,
             onGenerateRoute: appRouter.generateRoute,
           );
         },

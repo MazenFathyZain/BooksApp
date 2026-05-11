@@ -63,11 +63,14 @@ class AppRouter {
           settings: settings,
         );
       case Routes.dashboardScreen:
+        final returnToHomeAfterSave = settings.arguments as bool? ?? false;
         return MaterialPageRoute(
           builder: (BuildContext context) {
             return BlocProvider(
               create: (context) => getIt<DashboardCubit>(),
-              child: DashboardScreen(),
+              child: DashboardScreen(
+                returnToHomeAfterSave: returnToHomeAfterSave,
+              ),
             );
           },
           settings: settings,

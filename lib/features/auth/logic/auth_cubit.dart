@@ -2,7 +2,7 @@ import 'package:bloc/bloc.dart';
 import 'package:book/features/auth/data/models/login_request_body.dart';
 import 'package:book/features/auth/data/models/register_request_body.dart';
 import 'package:book/features/auth/data/repos/auth_repo.dart';
-import 'package:meta/meta.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../core/helpers/constants.dart';
 import '../../../core/helpers/shared_pref_helper.dart';
@@ -56,6 +56,10 @@ class AuthCubit extends Cubit<AuthState> {
   Future<void> saveUserToken(String token, String role) async {
     await SharedPrefHelper.setSecuredString(AppConstants.userToken, token);
     await SharedPrefHelper.setSecuredString(AppConstants.userRole, role);
-    DioFactory.setTokenIntoHeaderAfterLogin(token);
+    updateSessionState(
+      loggedIn: token.isNotEmpty,
+      admin: role.toLowerCase() == 'admin',
+    );
+    await DioFactory.setTokenIntoHeaderAfterLogin(token);
   }
 }

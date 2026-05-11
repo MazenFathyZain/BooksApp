@@ -1,5 +1,5 @@
 import 'package:book/core/helpers/extension.dart';
-import 'package:book/core/theming/colors.dart';
+import 'package:book/core/helpers/constants.dart';
 import 'package:book/features/favorite/logic/favorite_cubit.dart';
 import 'package:book/features/home/ui/widgets/book_card.dart';
 import 'package:flutter/material.dart';
@@ -23,7 +23,18 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
   @override
   void initState() {
     super.initState();
-    context.read<FavoriteCubit>().getFavoriteBooks();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      if (!isLoggedInUser) {
+        context.pushReplacementNamed(Routes.loginScreen);
+        return;
+      }
+
+      context.read<FavoriteCubit>().getFavoriteBooks();
+    });
   }
 
   @override
@@ -67,7 +78,7 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
         backgroundColor: AppColors.primary,
         elevation: 0,
         title: Text(
-          context.tr('favorite_books'),
+          context.tr('saved_books'),
           style: const TextStyle(
             color: AppColors.white,
             fontWeight: FontWeight.bold,
@@ -90,7 +101,7 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
               controller: _searchController,
               style: const TextStyle(color: AppColors.white),
               decoration: InputDecoration(
-                hintText: context.tr('search_favorite_books'),
+                hintText: context.tr('search_saved_books'),
                 hintStyle: TextStyle(color: AppColors.whiteOpacity70),
                 prefixIcon: const Icon(Icons.search, color: AppColors.white),
                 suffixIcon: _searchController.text.isNotEmpty
@@ -174,7 +185,7 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
                           Text(
                             _searchController.text.isNotEmpty
                                 ? context.tr('no_books_found')
-                                : context.tr('no_favorite_books'),
+                                : context.tr('no_saved_books'),
                             style: TextStyle(
                               color: AppColors.primaryOpacity70,
                               fontSize: 18,
@@ -217,7 +228,13 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
                           isSaved: isSaved,
                           onSaveToggle: () => _toggleSaveBook(book.id),
                           onTap: () {
-                            context.pushNamed(Routes.bookDetailsScreen, arguments: book.id);
+                            context.pushNamed(
+                              Routes.bookDetailsScreen,
+                              arguments: {
+                                'id': book.id,
+                                'isSaved': true,
+                              },
+                            );
                           },
                         );
                       },

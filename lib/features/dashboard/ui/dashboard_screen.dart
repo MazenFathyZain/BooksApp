@@ -1,8 +1,7 @@
 import 'dart:io';
 import 'package:book/core/helpers/extension.dart';
-import 'package:book/core/helpers/shared_pref_helper.dart';
+import 'package:book/core/helpers/session_helper.dart';
 import 'package:book/core/routing/routes.dart';
-import 'package:book/core/theming/colors.dart';
 import 'package:book/features/dashboard/logic/dashboard_cubit.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -12,7 +11,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/theming/app_colors.dart';
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final bool returnToHomeAfterSave;
+
+  const DashboardScreen({
+    super.key,
+    this.returnToHomeAfterSave = false,
+  });
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -250,9 +254,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
           TextButton(
-            onPressed: () {
-              SharedPrefHelper.clearAllSecuredData();
-              context.pushReplacementNamed(Routes.loginScreen);
+            onPressed: () async {
+              await clearSession();
+              if (context.mounted) {
+                context.pushNamedAndRemoveUntil(
+                  Routes.loginScreen,
+                  predicate: (route) => false,
+                );
+              }
             },
             child: Text(
               context.tr('logout'),
@@ -272,22 +281,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: AppColors.primary,
         elevation: 0,
         title: Text(
-          context.tr('dashboard'),
+          context.tr('add_book'),
           style: const TextStyle(
             color: AppColors.white,
             fontWeight: FontWeight.bold,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout, color: AppColors.white),
-            onPressed: _showLogoutDialog,
-          ),
-        ],
+        actions:
+            widget.returnToHomeAfterSave
+                ? const []
+                : [
+                  IconButton(
+                    icon: const Icon(Icons.logout, color: AppColors.white),
+                    onPressed: _showLogoutDialog,
+                  ),
+                ],
       ),
       body: BlocConsumer<DashboardCubit, DashboardState>(
         listener: (context, state) {
           if (state is DashboardSuccess) {
+            if (widget.returnToHomeAfterSave) {
+              Navigator.pop(context, true);
+              return;
+            }
+
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(context.tr('book_added_successfully')),

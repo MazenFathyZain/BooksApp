@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/helpers/media_url_helper.dart';
 import '../../../../core/theming/app_colors.dart';
 
 class BookCoverImage extends StatelessWidget {
@@ -15,15 +16,7 @@ class BookCoverImage extends StatelessWidget {
   });
 
   String? get _resolvedImageUrl {
-    if (imageUrl == null || imageUrl!.isEmpty) {
-      return null;
-    }
-
-    if (imageUrl!.startsWith('http://') || imageUrl!.startsWith('https://')) {
-      return imageUrl;
-    }
-
-    return 'http://localhost:3000$imageUrl';
+    return resolveMediaUrl(imageUrl);
   }
 
   @override

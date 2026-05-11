@@ -160,7 +160,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.black.withOpacity(0.2),
+                      color: AppColors.black.withValues(alpha: 0.2),
                       blurRadius: 20,
                       offset: const Offset(0, 10),
                     ),
@@ -263,97 +263,104 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
               const SizedBox(height: 20),
 
               // Playback Controls
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Playback Speed
-                  IconButton(
-                    onPressed: _changePlaybackSpeed,
-                    icon: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
+              SizedBox(
+                width: double.infinity,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Playback Speed
+                      IconButton(
+                        onPressed: _changePlaybackSpeed,
+                        icon: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: AppColors.primary),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${_playbackSpeed}x',
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
                       ),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: AppColors.primary),
-                        borderRadius: BorderRadius.circular(8),
+
+                      const SizedBox(width: 20),
+
+                      // Skip Backward 10s
+                      IconButton(
+                        onPressed: _skipBackward,
+                        iconSize: 40,
+                        icon: const Icon(
+                          Icons.replay_10,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
-                      child: Text(
-                        '${_playbackSpeed}x',
-                        style: const TextStyle(
+
+                      const SizedBox(width: 20),
+
+                      // Play/Pause Button
+                      Container(
+                        width: 70,
+                        height: 70,
+                        decoration: BoxDecoration(
                           color: AppColors.primary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.3),
+                              blurRadius: 15,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          onPressed: _togglePlayPause,
+                          iconSize: 40,
+                          icon: Icon(
+                            _isPlaying ? Icons.pause : Icons.play_arrow,
+                            color: AppColors.white,
+                          ),
                         ),
                       ),
-                    ),
-                  ),
 
-                  const SizedBox(width: 20),
+                      const SizedBox(width: 20),
 
-                  // Skip Backward 10s
-                  IconButton(
-                    onPressed: _skipBackward,
-                    iconSize: 40,
-                    icon: const Icon(
-                      Icons.replay_10,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-
-                  const SizedBox(width: 20),
-
-                  // Play/Pause Button
-                  Container(
-                    width: 70,
-                    height: 70,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withOpacity(0.3),
-                          blurRadius: 15,
-                          offset: const Offset(0, 5),
+                      // Skip Forward 10s
+                      IconButton(
+                        onPressed: _skipForward,
+                        iconSize: 40,
+                        icon: const Icon(
+                          Icons.forward_10,
+                          color: AppColors.textPrimary,
                         ),
-                      ],
-                    ),
-                    child: IconButton(
-                      onPressed: _togglePlayPause,
-                      iconSize: 40,
-                      icon: Icon(
-                        _isPlaying ? Icons.pause : Icons.play_arrow,
-                        color: AppColors.white,
                       ),
-                    ),
+
+                      const SizedBox(width: 20),
+
+                      // Volume (placeholder)
+                      IconButton(
+                        onPressed: () {
+                          // TODO: Implement volume control
+                        },
+                        iconSize: 30,
+                        icon: const Icon(
+                          Icons.volume_up,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
-
-                  const SizedBox(width: 20),
-
-                  // Skip Forward 10s
-                  IconButton(
-                    onPressed: _skipForward,
-                    iconSize: 40,
-                    icon: const Icon(
-                      Icons.forward_10,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-
-                  const SizedBox(width: 20),
-
-                  // Volume (placeholder)
-                  IconButton(
-                    onPressed: () {
-                      // TODO: Implement volume control
-                    },
-                    iconSize: 30,
-                    icon: const Icon(
-                      Icons.volume_up,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
+                ),
               ),
 
               const Spacer(),

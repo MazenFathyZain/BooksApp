@@ -3,9 +3,9 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../core/theming/app_colors.dart';
+import '../../../../core/helpers/media_url_helper.dart';
 
 class WordViewerScreen extends StatefulWidget {
   const WordViewerScreen({super.key});
@@ -15,7 +15,6 @@ class WordViewerScreen extends StatefulWidget {
 }
 
 class _WordViewerScreenState extends State<WordViewerScreen> {
-  InAppWebViewController? _webViewController;
   bool _isLoading = true;
   String? _errorMessage;
   double _progress = 0;
@@ -102,9 +101,6 @@ class _WordViewerScreenState extends State<WordViewerScreen> {
                 builtInZoomControls: true,
                 displayZoomControls: false,
               ),
-              onWebViewCreated: (controller) {
-                _webViewController = controller;
-              },
               onLoadStart: (controller, url) {
                 setState(() {
                   _isLoading = true;
@@ -121,10 +117,14 @@ class _WordViewerScreenState extends State<WordViewerScreen> {
                   _progress = progress / 100;
                 });
               },
-              onLoadError: (controller, url, code, message) {
+              onReceivedError: (controller, request, error) {
+                if (!mounted) {
+                  return;
+                }
                 setState(() {
                   _isLoading = false;
-                  _errorMessage = 'Failed to load document. You can download it instead.';
+                  _errorMessage =
+                      'Failed to load document. You can download it instead.';
                 });
               },
             ),
@@ -169,16 +169,15 @@ class _WordViewerScreenState extends State<WordViewerScreen> {
         ),
       );
 
-      // Request storage permission
-      final status = await _requestStoragePermission();
-      if (!status) {
-        throw Exception('Storage permission denied');
-      }
+      final resolvedUrl = resolveMediaUrl(wordUrl) ?? wordUrl;
 
       // Get download directory
       Directory? directory;
       if (Platform.isAndroid) {
-        directory = Directory('/storage/emulated/0/Download');
+        final baseDir = await getExternalStorageDirectory();
+        if (baseDir != null) {
+          directory = Directory('${baseDir.path}/downloads');
+        }
       } else if (Platform.isIOS) {
         directory = await getApplicationDocumentsDirectory();
       }
@@ -186,17 +185,19 @@ class _WordViewerScreenState extends State<WordViewerScreen> {
       if (directory == null) {
         throw Exception('Could not find download directory');
       }
+      await directory.create(recursive: true);
 
       // Create file name
       final fileName = bookTitle
           .replaceAll(RegExp(r'[^\w\s-]'), '')
           .replaceAll(' ', '_');
-      final extension = wordUrl.toLowerCase().contains('.docx') ? '.docx' : '.doc';
+      final extension =
+          resolvedUrl.toLowerCase().contains('.docx') ? '.docx' : '.doc';
       final filePath = '${directory.path}/$fileName$extension';
 
       // Download the file
       final dio = Dio();
-      await dio.download(wordUrl, filePath);
+      await dio.download(resolvedUrl, filePath);
 
       // Close loading dialog
       if (mounted) {
@@ -205,7 +206,7 @@ class _WordViewerScreenState extends State<WordViewerScreen> {
         // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Document downloaded successfully!\nSaved to: $filePath'),
+            content: Text('Downloaded:\n$filePath'),
             backgroundColor: AppColors.success,
             duration: const Duration(seconds: 3),
           ),
@@ -225,15 +226,5 @@ class _WordViewerScreenState extends State<WordViewerScreen> {
         );
       }
     }
-  }
-
-  Future<bool> _requestStoragePermission() async {
-    if (Platform.isAndroid) {
-      final status = await Permission.storage.request();
-      return status.isGranted;
-    } else if (Platform.isIOS) {
-      return true;
-    }
-    return false;
   }
 }

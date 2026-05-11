@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../helpers/extension.dart';
 import '../helpers/constants.dart';
 import '../helpers/shared_pref_helper.dart';
+import '../helpers/session_helper.dart';
 import '../routing/routes.dart';
 import '../theming/app_colors.dart';
 
@@ -13,9 +14,7 @@ class AppDrawer extends StatelessWidget {
   }
 
   Future<Map<String, String>> getUserData() async {
-    final name = await SharedPrefHelper.getSecuredString("") ?? '';
-    final email = await SharedPrefHelper.getSecuredString("AppConstants.userEmail") ?? '';
-    return {'name': "Mazen", 'email': "mazenfathyzain1@gmail.com"};
+    return {'name': "", 'email': ""};
   }
 
   @override
@@ -54,13 +53,13 @@ class AppDrawer extends StatelessWidget {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: AppColors.white.withOpacity(0.3),
+                              color: AppColors.white.withValues(alpha: 0.3),
                               width: 2,
                             ),
                           ),
                           child: CircleAvatar(
                             radius: 45,
-                            backgroundColor: AppColors.white.withOpacity(0.2),
+                            backgroundColor: AppColors.white.withValues(alpha: 0.2),
                             child: Icon(
                               Icons.person_outline,
                               size: 50,
@@ -113,7 +112,7 @@ class AppDrawer extends StatelessWidget {
                           : userData['email']!,
                       style: TextStyle(
                         fontSize: 14,
-                        color: AppColors.white.withOpacity(0.9),
+                        color: AppColors.white.withValues(alpha: 0.9),
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -135,17 +134,51 @@ class AppDrawer extends StatelessWidget {
                   isDarkMode: isDarkMode,
                   onTap: () {
                     Navigator.of(context).pop();
-                    Navigator.pushReplacementNamed(context, Routes.homeScreen);
+                    Navigator.pushNamedAndRemoveUntil(
+                      context,
+                      Routes.homeScreen,
+                      (route) => false,
+                    );
                   },
                 ),
                 const SizedBox(height: 8),
                 _buildMenuItem(
                   context: context,
-                  icon: Icons.favorite_outline,
-                  title: context.tr('favorites'),
+                  icon: Icons.bookmark_outline_rounded,
+                  title: context.tr('saved_books'),
                   isDarkMode: isDarkMode,
-                  onTap: () {
+                  onTap: () async {
                     Navigator.of(context).pop();
+                    if (!isLoggedInUser) {
+                      final shouldLogin = await showDialog<bool>(
+                        context: context,
+                        builder:
+                            (dialogContext) => AlertDialog(
+                              title: Text(context.tr('login_required')),
+                              content: Text(
+                                context.tr('login_to_view_saved_books'),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed:
+                                      () => Navigator.pop(dialogContext, false),
+                                  child: Text(context.tr('cancel')),
+                                ),
+                                TextButton(
+                                  onPressed:
+                                      () => Navigator.pop(dialogContext, true),
+                                  child: Text(context.tr('login')),
+                                ),
+                              ],
+                            ),
+                      );
+
+                      if (shouldLogin == true && context.mounted) {
+                        Navigator.pushNamed(context, Routes.loginScreen);
+                      }
+                      return;
+                    }
+
                     Navigator.pushNamed(context, Routes.favoriteBooksScreen);
                   },
                 ),
@@ -232,11 +265,12 @@ class AppDrawer extends StatelessWidget {
                           );
 
                           if (shouldLogout == true) {
-                            await SharedPrefHelper.clearAllSecuredData();
+                            await clearSession();
                             if (context.mounted) {
-                              Navigator.pushReplacementNamed(
+                              Navigator.pushNamedAndRemoveUntil(
                                 context,
                                 Routes.loginScreen,
+                                (route) => false,
                               );
                             }
                           }
@@ -251,50 +285,7 @@ class AppDrawer extends StatelessWidget {
             ),
           ),
 
-          // Footer Section
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDarkMode ? Colors.grey[850] : Colors.grey[100],
-              border: Border(
-                top: BorderSide(
-                  color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
-                  width: 1,
-                ),
-              ),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.menu_book_rounded,
-                      size: 20,
-                      color: AppColors.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      context.tr('app_name'),
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: isDarkMode ? Colors.white : AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  context.tr('app_version'),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDarkMode ? Colors.grey[400] : AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
+
         ],
       ),
     );
@@ -318,7 +309,7 @@ class AppDrawer extends StatelessWidget {
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: (iconColor ?? AppColors.primary).withOpacity(0.1),
+            color: (iconColor ?? AppColors.primary).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
@@ -345,7 +336,7 @@ class AppDrawer extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
-        hoverColor: AppColors.primary.withOpacity(0.05),
+        hoverColor: AppColors.primary.withValues(alpha: 0.05),
       ),
     );
   }

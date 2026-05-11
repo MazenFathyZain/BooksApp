@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart';
 import '../../../core/helpers/extension.dart';
+import '../../../core/helpers/constants.dart';
+import '../../../core/helpers/media_url_helper.dart';
 import '../../../core/theming/app_colors.dart';
+import '../../../core/routing/routes.dart';
 import '../logic/book_details_cubit.dart';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
+import '../../../core/di/dependency_injection.dart';
+import '../../favorite/data/repos/favorite_repo.dart';
+import '../../home/data/models/add_favorite_request.dart';
+import '../../home/data/repos/home_repo.dart';
 
 class BookDetailsScreen extends StatefulWidget {
   const BookDetailsScreen({super.key});
@@ -18,35 +23,149 @@ class BookDetailsScreen extends StatefulWidget {
 
 class _BookDetailsScreenState extends State<BookDetailsScreen> {
   bool _isSaved = false;
+  bool _isSaving = false;
   bool _isDownloadingPdf = false;
   bool _isDownloadingWord = false;
   bool _isDownloadingAudio = false;
   double _downloadProgress = 0.0;
+  String? _bookId;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final String? id = ModalRoute.of(context)!.settings.arguments as String?;
-      if (id != null) {
-        context.read<BookDetailsCubit>().getBookById(id);
+      final args = ModalRoute.of(context)?.settings.arguments;
+
+      String? id;
+      bool? isSaved;
+
+      if (args is String) {
+        id = args;
+      } else if (args is Map) {
+        final dynamic rawId = args['id'] ?? args['bookId'];
+        if (rawId is String) {
+          id = rawId;
+        }
+        final dynamic rawSaved = args['isSaved'];
+        if (rawSaved is bool) {
+          isSaved = rawSaved;
+        }
+      }
+
+      if (id == null || id.isEmpty) {
+        return;
+      }
+
+      _bookId = id;
+      if (isSaved == true) {
+        setState(() => _isSaved = true);
+      }
+
+      context.read<BookDetailsCubit>().getBookById(id);
+
+      // If caller didn't know whether it's saved, verify from server in background.
+      if (isLoggedInUser && isSaved != true) {
+        _hydrateSavedStatus(id);
       }
     });
   }
 
-  void _toggleSave() {
-    setState(() {
-      _isSaved = !_isSaved;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          _isSaved ? 'Added to favorites' : 'Removed from favorites',
+  Future<void> _hydrateSavedStatus(String bookId) async {
+    try {
+      final favorites = await getIt<FavoriteRepo>().getFavoriteBooks();
+      if (!mounted) {
+        return;
+      }
+
+      final isFavorite = favorites.any((book) => book.id == bookId);
+      if (isFavorite && !_isSaved) {
+        setState(() => _isSaved = true);
+      }
+    } catch (_) {
+      // Ignore: not critical for details screen.
+    }
+  }
+
+  Future<void> _toggleSave() async {
+    if (!isLoggedInUser) {
+      await _confirmLoginRequired('login_to_save_books');
+      return;
+    }
+
+    final bookId = _bookId;
+    if (bookId == null || bookId.isEmpty) {
+      return;
+    }
+
+    if (_isSaving) {
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      // Backend currently exposes "add to favorite/saved" only.
+      // We keep the UI simple: saving calls the API; unsaving is local-only.
+      if (!_isSaved) {
+        await getIt<HomeRepo>().addToFavorite(AddFavoriteRequest(bookId: bookId));
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isSaved = true;
+        _isSaving = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.tr('book_saved')),
+          backgroundColor: AppColors.primary,
+          duration: const Duration(seconds: 1),
         ),
-        backgroundColor: AppColors.primary,
-        duration: const Duration(seconds: 1),
-      ),
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() => _isSaving = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${context.tr('error_occurred')} ${e.toString()}'),
+          backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmLoginRequired(String messageKey) async {
+    final shouldLogin = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Text(context.tr('login_required')),
+            content: Text(context.tr(messageKey)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(context.tr('cancel')),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: Text(context.tr('login')),
+              ),
+            ],
+          ),
     );
+
+    if (shouldLogin == true && mounted) {
+      await context.pushNamed(Routes.loginScreen);
+    }
   }
 
   Future<void> _handleDownload(String url, String fileName, String type) async {
@@ -58,21 +177,13 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     });
 
     try {
-      final status = await _requestStoragePermission();
-      if (!status) {
-        throw Exception('Storage permission denied');
+      final resolvedUrl = resolveMediaUrl(url);
+      if (resolvedUrl == null) {
+        throw Exception('Invalid file url');
       }
 
-      Directory? directory;
-      if (Platform.isAndroid) {
-        directory = Directory('/storage/emulated/0/Download');
-      } else if (Platform.isIOS) {
-        directory = await getApplicationDocumentsDirectory();
-      }
-
-      if (directory == null) {
-        throw Exception('Could not find download directory');
-      }
+      final Directory directory = await _getDownloadDirectory();
+      await directory.create(recursive: true);
 
       String extension = '';
       if (type == 'pdf') {
@@ -80,7 +191,13 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
       } else if (type == 'word') {
         extension = url.toLowerCase().contains('.docx') ? '.docx' : '.doc';
       } else if (type == 'audio') {
-        extension = '.mp3';
+        final uri = Uri.tryParse(resolvedUrl);
+        final lastSegment = uri?.pathSegments.isNotEmpty == true
+            ? uri!.pathSegments.last
+            : '';
+        final dotIndex = lastSegment.lastIndexOf('.');
+        extension =
+            dotIndex != -1 ? lastSegment.substring(dotIndex) : '.mp3';
       }
 
       final cleanFileName = fileName.replaceAll(RegExp(r'[^\w\s-]'), '').replaceAll(' ', '_');
@@ -88,7 +205,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
 
       final dio = Dio();
       await dio.download(
-        "http://192.168.1.39:3000$url",
+        resolvedUrl,
         filePath,
         onReceiveProgress: (received, total) {
           if (total != -1) {
@@ -109,9 +226,9 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Downloaded successfully!'),
+            content: Text('Downloaded:\n$filePath'),
             backgroundColor: AppColors.success,
-            duration: const Duration(seconds: 2),
+            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -126,7 +243,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Download failed'),
+            content: Text('Download failed: ${e.toString()}'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -134,53 +251,64 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     }
   }
 
-  Future<bool> _requestStoragePermission() async {
+  Future<Directory> _getDownloadDirectory() async {
     if (Platform.isAndroid) {
-      final status = await Permission.storage.request();
-      return status.isGranted;
-    } else if (Platform.isIOS) {
-      return true;
+      final baseDir = await getExternalStorageDirectory();
+      if (baseDir != null) {
+        return Directory('${baseDir.path}/downloads');
+      }
     }
-    return false;
+    return await getApplicationDocumentsDirectory();
   }
 
   void _handleReadPdf(String pdfUrl, String title) {
+    final resolvedPdfUrl = resolveMediaUrl(pdfUrl);
+    if (resolvedPdfUrl == null) {
+      return;
+    }
+
     Navigator.pushNamed(
       context,
       '/pdf_reader',
       arguments: {
-        'pdfUrl': "http://192.168.1.39:3000$pdfUrl",
+        'pdfUrl': resolvedPdfUrl,
         'title': title,
       },
     );
   }
 
   void _handlePlayAudio(String audioUrl, String title, String author, String? imageUrl) {
+    final resolvedAudioUrl = resolveMediaUrl(audioUrl);
+    if (resolvedAudioUrl == null) {
+      return;
+    }
+
     Navigator.pushNamed(
       context,
       '/audio_player',
       arguments: {
-        'audioUrl': "http://192.168.1.39:3000$audioUrl",
+        'audioUrl': resolvedAudioUrl,
         'title': title,
         'author': author,
-        'imageUrl': imageUrl != null ? "http://192.168.1.39:3000$imageUrl" : null,
+        'imageUrl': resolveMediaUrl(imageUrl),
       },
     );
   }
 
   void _handleOpenWord(String wordUrl, String title) {
+    final resolvedWordUrl = resolveMediaUrl(wordUrl);
+    if (resolvedWordUrl == null) {
+      return;
+    }
+
     Navigator.pushNamed(
       context,
       '/word_viewer',
       arguments: {
-        'wordUrl': "http://192.168.1.39:3000$wordUrl",
+        'wordUrl': resolvedWordUrl,
         'title': title,
       },
     );
-  }
-
-  String _formatDate(DateTime date) {
-    return DateFormat('MMM dd, yyyy').format(date);
   }
 
   @override
@@ -245,6 +373,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
             final String? wordUrl = book.wordUrl;
             final String? audioUrl = book.audioUrl;
             final String? imageUrl = book.imageUrl;
+            final String? resolvedImageUrl = resolveMediaUrl(imageUrl);
 
             final bool hasContent = (pdfUrl != null && pdfUrl.isNotEmpty) ||
                 (wordUrl != null && wordUrl.isNotEmpty) ||
@@ -263,11 +392,25 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                   ),
                   actions: [
                     IconButton(
-                      icon: Icon(
-                        _isSaved ? Icons.bookmark : Icons.bookmark_border,
-                        color: Colors.white,
-                      ),
-                      onPressed: _toggleSave,
+                      icon:
+                          _isSaving
+                              ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.4,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
+                              )
+                              : Icon(
+                                _isSaved
+                                    ? Icons.bookmark
+                                    : Icons.bookmark_border,
+                                color: Colors.white,
+                              ),
+                      onPressed: _isSaving ? null : _toggleSave,
                     ),
                   ],
                   flexibleSpace: FlexibleSpaceBar(
@@ -296,7 +439,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.3),
+                                      color: Colors.black.withValues(alpha: 0.3),
                                       blurRadius: 15,
                                       offset: const Offset(0, 8),
                                     ),
@@ -304,9 +447,9 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
-                                  child: (imageUrl != null && imageUrl.isNotEmpty)
+                                  child: (resolvedImageUrl != null && resolvedImageUrl.isNotEmpty)
                                       ? Image.network(
-                                    "http://192.168.1.39:3000$imageUrl",
+                                    resolvedImageUrl,
                                     fit: BoxFit.cover,
                                     errorBuilder: (context, error, stackTrace) =>
                                         _buildPlaceholderCover(),
@@ -496,7 +639,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
       child: Icon(
         Icons.menu_book_rounded,
         size: 70,
-        color: AppColors.primary.withOpacity(0.3),
+        color: AppColors.primary.withValues(alpha: 0.3),
       ),
     );
   }
@@ -516,7 +659,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -599,7 +742,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -626,7 +769,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
         Icon(
           item.icon,
           size: 20,
-          color: AppColors.primary.withOpacity(0.6),
+          color: AppColors.primary.withValues(alpha: 0.6),
         ),
         const SizedBox(width: 12),
         Expanded(

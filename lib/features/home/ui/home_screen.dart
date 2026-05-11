@@ -1,6 +1,9 @@
 import 'package:book/core/helpers/extension.dart';
 import 'package:book/core/helpers/constants.dart';
 import 'package:book/core/helpers/shared_pref_helper.dart';
+import 'package:book/core/helpers/session_helper.dart';
+import 'package:book/core/di/dependency_injection.dart';
+import 'package:book/features/favorite/data/repos/favorite_repo.dart';
 import 'package:book/features/home/logic/home_cubit.dart';
 import 'package:book/features/home/ui/widgets/book_card.dart';
 import 'package:book/features/home/ui/widgets/book_cover_tile.dart';
@@ -30,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadSavedDisplayMode();
+    _loadSavedBookIds();
     context.read<HomeCubit>().fetchCategories();
     context.read<HomeCubit>().fetchAllBooks();
   }
@@ -169,6 +173,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _toggleSaveBook(String bookId) {
+    if (!isLoggedInUser) {
+      _confirmLoginRequired('login_to_save_books');
+      return;
+    }
+
     final isCurrentlySaved = _savedBookIds.contains(bookId);
 
     if (isCurrentlySaved) {
@@ -194,6 +203,39 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Future<void> _loadSavedBookIds() async {
+    if (!isLoggedInUser) {
+      if (!mounted) {
+        return;
+      }
+
+      if (_savedBookIds.isNotEmpty) {
+        setState(() => _savedBookIds.clear());
+      }
+      return;
+    }
+
+    try {
+      final favorites = await getIt<FavoriteRepo>().getFavoriteBooks();
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _savedBookIds
+          ..clear()
+          ..addAll(
+            favorites
+                .map((book) => book.id)
+                .whereType<String>()
+                .where((id) => id.isNotEmpty),
+          );
+      });
+    } catch (_) {
+      // Ignore: saving is optional, and we don't want to block home loading.
+    }
+  }
+
   Future<void> _toggleDisplayMode() async {
     final nextView = !_isCoverOnlyView;
 
@@ -204,22 +246,121 @@ class _HomeScreenState extends State<HomeScreen> {
     await SharedPrefHelper.setData(AppConstants.homeDisplayCoverOnly, nextView);
   }
 
+  Future<void> _refreshBooks() async {
+    _onSearch(_searchController.text);
+  }
+
+  Future<void> _confirmLoginRequired(String messageKey) async {
+    final shouldLogin = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Text(context.tr('login_required')),
+            content: Text(context.tr(messageKey)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(context.tr('cancel')),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: Text(context.tr('login')),
+              ),
+            ],
+          ),
+    );
+
+    if (shouldLogin == true && mounted) {
+      await context.pushNamed(Routes.loginScreen);
+    }
+  }
+
+  Future<void> _openSavedBooks() async {
+    if (!isLoggedInUser) {
+      await _confirmLoginRequired('login_to_view_saved_books');
+      return;
+    }
+
+    await context.pushNamed(Routes.favoriteBooksScreen);
+    await _loadSavedBookIds();
+  }
+
+  Future<void> _handleAuthAction() async {
+    if (!isLoggedInUser) {
+      await context.pushNamed(Routes.loginScreen);
+      return;
+    }
+
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Text(context.tr('logout')),
+            content: Text(context.tr('logout_confirmation')),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(context.tr('cancel')),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                child: Text(context.tr('logout')),
+              ),
+            ],
+          ),
+    );
+
+    if (shouldLogout == true && mounted) {
+      await clearSession();
+      if (mounted) {
+        context.pushNamedAndRemoveUntil(
+          Routes.loginScreen,
+          predicate: (route) => false,
+        );
+      }
+    }
+  }
+
+  Future<void> _openAddBookScreen() async {
+    final didAddBook = await context.pushNamed(
+      Routes.dashboardScreen,
+      arguments: true,
+    );
+
+    if (didAddBook == true && mounted) {
+      await _refreshBooks();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.tr('book_added_successfully')),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      drawer: AppDrawer(),
+      drawer: const AppDrawer(),
       backgroundColor: AppColors.background,
+      floatingActionButton:
+          isAdmin
+              ? FloatingActionButton.extended(
+                onPressed: _openAddBookScreen,
+                icon: const Icon(Icons.add),
+                label: Text(context.tr('add_book')),
+              )
+              : null,
       appBar: AppBar(
         iconTheme: const IconThemeData(color: Colors.white),
         backgroundColor: AppColors.primary,
         elevation: 0,
-        title: Text(
-          context.tr('book_library'),
-          style: const TextStyle(
-            color: AppColors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+
+
         actions: [
           IconButton(
             icon: Icon(
@@ -234,10 +375,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               IconButton(
                 icon: const Icon(Icons.bookmark_border, color: AppColors.white),
-                onPressed: () {
-                  // Navigate to saved books
-                  // context.pushNamed(Routes.savedBooksScreen);
-                },
+                onPressed: _openSavedBooks,
               ),
               if (_savedBookIds.isNotEmpty)
                 Positioned(
@@ -266,13 +404,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
             ],
           ),
-          IconButton(
-            icon: const Icon(Icons.person_outline, color: AppColors.white),
-            onPressed: () {
-              // Navigate to profile
-              SharedPrefHelper.clearAllSecuredData();
-            },
-          ),
+
         ],
       ),
       body: MultiBlocListener(
@@ -698,6 +830,14 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    context.pushNamed(Routes.bookDetailsScreen, arguments: bookId);
+    context
+        .pushNamed(
+          Routes.bookDetailsScreen,
+          arguments: {
+            'id': bookId,
+            'isSaved': _savedBookIds.contains(bookId),
+          },
+        )
+        .then((_) => _loadSavedBookIds());
   }
 }

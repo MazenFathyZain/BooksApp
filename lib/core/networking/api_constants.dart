@@ -1,5 +1,6 @@
 class ApiConstants {
   static const String apiBaseUrl = 'http://72.60.47.238:3000/api/';
+  static const int mediaPort = 9000;
 
 //   Auth
   static const String loginEP = 'auth/login';
