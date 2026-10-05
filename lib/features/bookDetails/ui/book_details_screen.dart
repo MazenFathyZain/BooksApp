@@ -427,18 +427,23 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     final pdfUrl = book.pdfUrl;
     final title = book.title ?? context.tr('pdf_viewer');
     final pdfPages = book.pdfPages ?? const [];
+    final resolvedPdfUrl = resolveMediaUrl(pdfUrl);
     if (pdfPages.isNotEmpty) {
       Navigator.push(
         context,
         MaterialPageRoute(
           builder:
-              (context) => PagedPdfReaderScreen(title: title, pages: pdfPages),
+              (context) => PagedPdfReaderScreen(
+                title: title,
+                pages: pdfPages,
+                totalPageCount: book.pdfPageCount,
+                originalPdfUrl: resolvedPdfUrl,
+              ),
         ),
       );
       return;
     }
 
-    final resolvedPdfUrl = resolveMediaUrl(pdfUrl);
     if (resolvedPdfUrl == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
