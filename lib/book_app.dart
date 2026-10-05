@@ -1,5 +1,7 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/di/dependency_injection.dart';
@@ -24,20 +26,44 @@ class BookApp extends StatelessWidget {
           final Locale locale =
               localeState is LocaleChanged
                   ? localeState.locale
-                  : const Locale('en');
+                  : const Locale('tg');
 
           return MaterialApp(
+
             locale: locale,
-            supportedLocales: const [Locale('en'), Locale('ar')],
+            supportedLocales: const [
+              Locale('en'),
+              Locale('ar'),
+              Locale('tg'),
+              Locale('ru'),
+              Locale('fa'),
+            ],
             localizationsDelegates: const [
               AppLocalizations.delegate,
+              _TajikMaterialLocalizationsDelegate(),
+              _TajikCupertinoLocalizationsDelegate(),
               GlobalMaterialLocalizations.delegate,
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
+            builder: (context, child) {
+              final textDirection =
+                  locale.languageCode == 'ar' || locale.languageCode == 'fa'
+                      ? TextDirection.rtl
+                      : TextDirection.ltr;
+
+              return Directionality(
+                textDirection: textDirection,
+                child: child ?? const SizedBox.shrink(),
+              );
+            },
             debugShowCheckedModeBanner: false,
-            title: 'Kitobhonai ma\'rifat',
+            onGenerateTitle:
+                (context) =>
+                    AppLocalizations.of(context)?.translate('app_name') ??
+                    "Kitobhonai ma'rifat",
             theme: ThemeData(
+
               useMaterial3: true,
               colorScheme: ColorScheme.fromSeed(
                 seedColor: AppColors.primary,
@@ -45,7 +71,9 @@ class BookApp extends StatelessWidget {
                 secondary: AppColors.secondary,
                 surface: AppColors.surface,
                 brightness: Brightness.light,
+
               ),
+
               scaffoldBackgroundColor: AppColors.background,
               appBarTheme: const AppBarTheme(
                 backgroundColor: AppColors.primary,
@@ -142,4 +170,40 @@ class BookApp extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TajikMaterialLocalizationsDelegate
+    extends LocalizationsDelegate<MaterialLocalizations> {
+  const _TajikMaterialLocalizationsDelegate();
+
+  @override
+  bool isSupported(Locale locale) => locale.languageCode == 'tg';
+
+  @override
+  Future<MaterialLocalizations> load(Locale locale) {
+    return SynchronousFuture<MaterialLocalizations>(
+      const DefaultMaterialLocalizations(),
+    );
+  }
+
+  @override
+  bool shouldReload(_TajikMaterialLocalizationsDelegate old) => false;
+}
+
+class _TajikCupertinoLocalizationsDelegate
+    extends LocalizationsDelegate<CupertinoLocalizations> {
+  const _TajikCupertinoLocalizationsDelegate();
+
+  @override
+  bool isSupported(Locale locale) => locale.languageCode == 'tg';
+
+  @override
+  Future<CupertinoLocalizations> load(Locale locale) {
+    return SynchronousFuture<CupertinoLocalizations>(
+      const DefaultCupertinoLocalizations(),
+    );
+  }
+
+  @override
+  bool shouldReload(_TajikCupertinoLocalizationsDelegate old) => false;
 }

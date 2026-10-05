@@ -7,11 +7,12 @@ class DashboardRepo {
   final DashboardApis _api;
   DashboardRepo(this._api);
 
-
-Future<AddBookResponse> addBook(
+  Future<AddBookResponse> addBook(
     String title,
     String author,
     String category,
+    String categoryId,
+    String? subCategoryId,
     String description,
     File? image,
     File? pdf,
@@ -28,27 +29,29 @@ Future<AddBookResponse> addBook(
     String bookVersion,
     String century,
     String authorDoctrine,
-    ) async {
-  return await _api.addBook(
-    title,
-    author,
-    category,
-    description,
-    image,
-    pdf,
-    word,
-    audio,
-    partsCount,
-    subject,
-    language,
-    otherNames,
-    translators,
-    publisher,
-    publishingPlace,
-    publicationYear,
-    bookVersion,
-    century,
-    authorDoctrine,
-  );
-}
+  ) async {
+    return await _api.addBook(
+      title,
+      author,
+      category,
+      categoryId,
+      subCategoryId,
+      description,
+      image,
+      pdf,
+      word,
+      audio,
+      partsCount,
+      subject,
+      language,
+      otherNames,
+      translators,
+      publisher,
+      publishingPlace,
+      publicationYear,
+      bookVersion,
+      century,
+      authorDoctrine,
+    );
+  }
 }

@@ -1,8 +1,10 @@
 import 'package:book/core/helpers/extension.dart';
 import 'package:book/core/helpers/constants.dart';
 import 'package:book/core/helpers/shared_pref_helper.dart';
-import 'package:book/core/helpers/session_helper.dart';
 import 'package:book/core/di/dependency_injection.dart';
+import 'package:book/features/downloads/data/downloaded_book.dart';
+import 'package:book/features/downloads/data/downloaded_books_repo.dart';
+import 'package:book/features/downloads/ui/downloaded_books_screen.dart';
 import 'package:book/features/favorite/data/repos/favorite_repo.dart';
 import 'package:book/features/home/logic/home_cubit.dart';
 import 'package:book/features/home/ui/widgets/book_card.dart';
@@ -10,10 +12,12 @@ import 'package:book/features/home/ui/widgets/book_cover_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/localization/localization_cubit.dart';
 import '../../../core/routing/routes.dart';
 import '../../../core/theming/app_colors.dart';
 import '../../../core/widgets/app_drawer.dart';
 import '../data/models/books_response.dart';
+import '../data/models/category_tree_response.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,16 +28,19 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
-  String? _selectedCategory;
+  CategoryTreeResponse? _selectedCategory;
+  CategoryTreeResponse? _selectedSubCategory;
   bool _isCoverOnlyView = false;
+  bool _offlineSnackShown = false;
   final Set<String> _savedBookIds = {};
-  List<String> _categories = [];
+  List<CategoryTreeResponse> _categories = [];
 
   @override
   void initState() {
     super.initState();
     _loadSavedDisplayMode();
     _loadSavedBookIds();
+    context.read<HomeCubit>().setLanguageCode(context.currentLanguage);
     context.read<HomeCubit>().fetchCategories();
     context.read<HomeCubit>().fetchAllBooks();
   }
@@ -44,28 +51,36 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  void _onSearch(String query) {
+  Future<void> _onSearch(String query) async {
     if (_selectedCategory != null) {
       if (query.isEmpty) {
-        context.read<HomeCubit>().fetchBooksByCategory(_selectedCategory!);
+        await context.read<HomeCubit>().fetchBooksByCategory(
+          _selectedCategory!.id,
+          subCategoryId: _selectedSubCategory?.id,
+        );
       } else {
-        context.read<HomeCubit>().searchBooksInCategory(
+        await context.read<HomeCubit>().searchBooksInCategory(
           query,
-          _selectedCategory!,
+          _selectedCategory!.id,
+          subCategoryId: _selectedSubCategory?.id,
         );
       }
     } else {
       if (query.isEmpty) {
-        context.read<HomeCubit>().fetchAllBooks();
+        await context.read<HomeCubit>().fetchAllBooks();
       } else {
-        context.read<HomeCubit>().searchBooks(query);
+        await context.read<HomeCubit>().searchBooks(query);
       }
     }
   }
 
-  void _applyCategoryFilter(String? category) {
+  void _applyCategoryFilter(
+    CategoryTreeResponse? category, {
+    CategoryTreeResponse? subCategory,
+  }) {
     setState(() {
       _selectedCategory = category;
+      _selectedSubCategory = subCategory;
     });
 
     if (_selectedCategory == null) {
@@ -76,11 +91,15 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } else {
       if (_searchController.text.isEmpty) {
-        context.read<HomeCubit>().fetchBooksByCategory(_selectedCategory!);
+        context.read<HomeCubit>().fetchBooksByCategory(
+          _selectedCategory!.id,
+          subCategoryId: _selectedSubCategory?.id,
+        );
       } else {
         context.read<HomeCubit>().searchBooksInCategory(
           _searchController.text,
-          _selectedCategory!,
+          _selectedCategory!.id,
+          subCategoryId: _selectedSubCategory?.id,
         );
       }
     }
@@ -98,6 +117,12 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
+    CategoryTreeResponse? pendingCategory = _selectedCategory;
+    CategoryTreeResponse? pendingSubCategory =
+        pendingCategory?.id == _selectedCategory?.id
+            ? _selectedSubCategory
+            : null;
+
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -106,67 +131,203 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 44,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryOpacity20,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            final pendingSubCategories = pendingCategory?.children ?? const [];
+
+            return FractionallySizedBox(
+              heightFactor: 0.82,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 44,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryOpacity20,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryOpacity10,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(
+                              Icons.tune_rounded,
+                              color: AppColors.primary,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              context.tr('filter_categories'),
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(sheetContext),
+                            icon: const Icon(Icons.close_rounded),
+                            color: AppColors.textSecondary,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildFilterSectionHeader(
+                                icon: Icons.category_rounded,
+                                label: context.tr('select_category'),
+                              ),
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children:
+                                    _categories.map((category) {
+                                      return _buildFilterChoiceChip(
+                                        label: category.name,
+                                        count: category.children.length,
+                                        isSelected:
+                                            pendingCategory?.id == category.id,
+                                        onTap: () {
+                                          setSheetState(() {
+                                            pendingCategory = category;
+                                            pendingSubCategory = null;
+                                          });
+                                        },
+                                      );
+                                    }).toList(),
+                              ),
+                              const SizedBox(height: 22),
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 180),
+                                child:
+                                    pendingCategory == null
+                                        ? _buildEmptyFilterHint(
+                                          context.tr('select_category'),
+                                        )
+                                        : Column(
+                                          key: ValueKey(pendingCategory!.id),
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            _buildFilterSectionHeader(
+                                              icon: Icons.account_tree_rounded,
+                                              label: context.tr(
+                                                'select_sub_category',
+                                              ),
+                                            ),
+                                            const SizedBox(height: 10),
+                                            _buildFilterChoiceChip(
+                                              label: context.tr(
+                                                'all_books_in_category',
+                                              ),
+                                              isSelected:
+                                                  pendingSubCategory == null,
+                                              isWide: true,
+                                              onTap: () {
+                                                setSheetState(() {
+                                                  pendingSubCategory = null;
+                                                });
+                                              },
+                                            ),
+                                            if (pendingSubCategories
+                                                .isNotEmpty) ...[
+                                              const SizedBox(height: 10),
+                                              Wrap(
+                                                spacing: 8,
+                                                runSpacing: 8,
+                                                children:
+                                                    pendingSubCategories.map((
+                                                      subCategory,
+                                                    ) {
+                                                      return _buildFilterChoiceChip(
+                                                        label: subCategory.name,
+                                                        isSelected:
+                                                            pendingSubCategory
+                                                                ?.id ==
+                                                            subCategory.id,
+                                                        onTap: () {
+                                                          setSheetState(() {
+                                                            pendingSubCategory =
+                                                                subCategory;
+                                                          });
+                                                        },
+                                                      );
+                                                    }).toList(),
+                                              ),
+                                            ] else ...[
+                                              const SizedBox(height: 10),
+                                              _buildEmptyFilterHint(
+                                                context.tr(
+                                                  'no_sub_categories_available',
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.pop(sheetContext);
+                                _applyCategoryFilter(null);
+                              },
+                              icon: const Icon(Icons.restart_alt_rounded),
+                              label: Text(context.tr('all_categories')),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed:
+                                  pendingCategory == null
+                                      ? null
+                                      : () {
+                                        Navigator.pop(sheetContext);
+                                        _applyCategoryFilter(
+                                          pendingCategory,
+                                          subCategory: pendingSubCategory,
+                                        );
+                                      },
+                              icon: const Icon(Icons.check_rounded),
+                              label: Text(context.tr('apply')),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 20),
-                Text(
-                  context.tr('filter_categories'),
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _buildCategorySheetOption(
-                  label: context.tr('all_categories'),
-                  isSelected: _selectedCategory == null,
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _applyCategoryFilter(null);
-                  },
-                ),
-                const SizedBox(height: 8),
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(sheetContext).size.height * 0.55,
-                  ),
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: _categories.length,
-                    separatorBuilder:
-                        (context, index) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final category = _categories[index];
-                      return _buildCategorySheetOption(
-                        label: category,
-                        isSelected: _selectedCategory == category,
-                        onTap: () {
-                          Navigator.pop(sheetContext);
-                          _applyCategoryFilter(category);
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -247,7 +408,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _refreshBooks() async {
-    _onSearch(_searchController.text);
+    _offlineSnackShown = false;
+    await context.read<HomeCubit>().fetchCategories();
+    await _onSearch(_searchController.text);
   }
 
   Future<void> _confirmLoginRequired(String messageKey) async {
@@ -285,43 +448,6 @@ class _HomeScreenState extends State<HomeScreen> {
     await _loadSavedBookIds();
   }
 
-  Future<void> _handleAuthAction() async {
-    if (!isLoggedInUser) {
-      await context.pushNamed(Routes.loginScreen);
-      return;
-    }
-
-    final shouldLogout = await showDialog<bool>(
-      context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: Text(context.tr('logout')),
-            content: Text(context.tr('logout_confirmation')),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: Text(context.tr('cancel')),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                style: TextButton.styleFrom(foregroundColor: AppColors.error),
-                child: Text(context.tr('logout')),
-              ),
-            ],
-          ),
-    );
-
-    if (shouldLogout == true && mounted) {
-      await clearSession();
-      if (mounted) {
-        context.pushNamedAndRemoveUntil(
-          Routes.loginScreen,
-          predicate: (route) => false,
-        );
-      }
-    }
-  }
-
   Future<void> _openAddBookScreen() async {
     final didAddBook = await context.pushNamed(
       Routes.dashboardScreen,
@@ -329,6 +455,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     if (didAddBook == true && mounted) {
+      context.read<HomeCubit>().fetchCategories();
       await _refreshBooks();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -340,6 +467,20 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
     }
+  }
+
+  String _activeFilterLabel() {
+    final category = _selectedCategory;
+    if (category == null) {
+      return '';
+    }
+
+    final subCategory = _selectedSubCategory;
+    if (subCategory == null) {
+      return category.name;
+    }
+
+    return '${category.name} / ${subCategory.name}';
   }
 
   @override
@@ -359,7 +500,6 @@ class _HomeScreenState extends State<HomeScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
         backgroundColor: AppColors.primary,
         elevation: 0,
-
 
         actions: [
           IconButton(
@@ -404,11 +544,25 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
             ],
           ),
-
         ],
       ),
       body: MultiBlocListener(
         listeners: [
+          BlocListener<LocaleCubit, LocaleState>(
+            listener: (context, state) {
+              if (state is LocaleChanged) {
+                context.read<HomeCubit>().setLanguageCode(
+                  state.locale.languageCode,
+                );
+                setState(() {
+                  _selectedCategory = null;
+                  _selectedSubCategory = null;
+                });
+                context.read<HomeCubit>().fetchCategories();
+                context.read<HomeCubit>().fetchAllBooks();
+              }
+            },
+          ),
           BlocListener<HomeCubit, HomeState>(
             listenWhen: (previous, current) => current is CategoriesLoaded,
             listener: (context, state) {
@@ -416,6 +570,29 @@ class _HomeScreenState extends State<HomeScreen> {
                 setState(() {
                   _categories = state.categories;
                 });
+              }
+            },
+          ),
+          BlocListener<HomeCubit, HomeState>(
+            listenWhen:
+                (previous, current) =>
+                    current is HomeError || current is BooksLoaded,
+            listener: (context, state) {
+              if (state is BooksLoaded) {
+                _offlineSnackShown = false;
+                return;
+              }
+
+              if (state is HomeError && !_offlineSnackShown) {
+                _offlineSnackShown = true;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(context.tr('no_internet_connection')),
+                    backgroundColor: AppColors.error,
+                    duration: const Duration(seconds: 3),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
               }
             },
           ),
@@ -498,88 +675,143 @@ class _HomeScreenState extends State<HomeScreen> {
             Container(
               color: AppColors.primary,
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (value) {
-                        setState(() {});
-                        _onSearch(value);
-                      },
-                      style: const TextStyle(color: AppColors.white),
-                      decoration: InputDecoration(
-                        hintText: context.tr('search_books'),
-                        hintStyle: TextStyle(color: AppColors.whiteOpacity70),
-                        prefixIcon: const Icon(
-                          Icons.search,
-                          color: AppColors.white,
-                        ),
-                        suffixIcon:
-                            _searchController.text.isNotEmpty
-                                ? IconButton(
-                                  icon: const Icon(
-                                    Icons.clear,
-                                    color: AppColors.white,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {});
-                                    _searchController.clear();
-                                    _onSearch('');
-                                  },
-                                )
-                                : null,
-                        filled: true,
-                        fillColor: AppColors.whiteOpacity20,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Stack(
-                    clipBehavior: Clip.none,
+                  Row(
                     children: [
-                      Material(
-                        color: AppColors.whiteOpacity20,
-                        borderRadius: BorderRadius.circular(12),
-                        child: InkWell(
-                          onTap: _showCategoryFilterSheet,
-                          borderRadius: BorderRadius.circular(12),
-                          child: const SizedBox(
-                            width: 52,
-                            height: 52,
-                            child: Icon(
-                              Icons.tune_rounded,
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: (value) {
+                            setState(() {});
+                            _onSearch(value);
+                          },
+                          style: const TextStyle(color: AppColors.white),
+                          decoration: InputDecoration(
+                            hintText: context.tr('search_books'),
+                            hintStyle: TextStyle(
+                              color: AppColors.whiteOpacity70,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.search,
                               color: AppColors.white,
+                            ),
+                            suffixIcon:
+                                _searchController.text.isNotEmpty
+                                    ? IconButton(
+                                      icon: const Icon(
+                                        Icons.clear,
+                                        color: AppColors.white,
+                                      ),
+                                      onPressed: () {
+                                        setState(() {});
+                                        _searchController.clear();
+                                        _onSearch('');
+                                      },
+                                    )
+                                    : null,
+                            filled: true,
+                            fillColor: AppColors.whiteOpacity20,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 12,
                             ),
                           ),
                         ),
                       ),
-                      if (_selectedCategory != null)
-                        Positioned(
-                          right: 8,
-                          top: 8,
-                          child: Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFD166),
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: AppColors.primary,
-                                width: 1.5,
+                      const SizedBox(width: 12),
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Material(
+                            color: AppColors.whiteOpacity20,
+                            borderRadius: BorderRadius.circular(12),
+                            child: InkWell(
+                              onTap: _showCategoryFilterSheet,
+                              borderRadius: BorderRadius.circular(12),
+                              child: const SizedBox(
+                                width: 52,
+                                height: 52,
+                                child: Icon(
+                                  Icons.tune_rounded,
+                                  color: AppColors.white,
+                                ),
                               ),
                             ),
                           ),
-                        ),
+                          if (_selectedCategory != null)
+                            Positioned(
+                              right: 8,
+                              top: 8,
+                              child: Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFD166),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: AppColors.primary,
+                                    width: 1.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
+                  if (_selectedCategory != null) ...[
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Material(
+                        color: AppColors.whiteOpacity20,
+                        borderRadius: BorderRadius.circular(999),
+                        child: InkWell(
+                          onTap: () => _applyCategoryFilter(null),
+                          borderRadius: BorderRadius.circular(999),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.filter_alt_rounded,
+                                  size: 16,
+                                  color: AppColors.white,
+                                ),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Text(
+                                    _activeFilterLabel(),
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: AppColors.white,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Icon(
+                                  Icons.close_rounded,
+                                  size: 16,
+                                  color: AppColors.white,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -620,92 +852,76 @@ class _HomeScreenState extends State<HomeScreen> {
                   }
 
                   if (state is HomeError) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.error_outline,
-                            size: 64,
-                            color: AppColors.error,
-                          ),
-                          const SizedBox(height: 16),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 32),
-                            child: Text(
-                              state.message ?? context.tr('unknown_error'),
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: AppColors.error,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          ElevatedButton.icon(
-                            onPressed: () {
-                              context.read<HomeCubit>().fetchAllBooks();
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 12,
-                              ),
-                            ),
-                            icon: const Icon(Icons.refresh),
-                            label: Text(context.tr('retry')),
-                          ),
-                        ],
-                      ),
-                    );
+                    return _buildOfflineDownloadsOrError(state);
                   }
 
                   if (state is BooksLoaded) {
                     final allBooks = state.books ?? [];
 
                     if (allBooks.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.book_outlined,
-                              size: 64,
-                              color: AppColors.primaryOpacity50,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              context.tr('no_books_found'),
-                              style: TextStyle(
-                                color: AppColors.primaryOpacity70,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
+                      return _buildRefreshable(
+                        Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.book_outlined,
+                                size: 64,
+                                color: AppColors.primaryOpacity50,
                               ),
-                            ),
-                            if (_searchController.text.isNotEmpty ||
-                                _selectedCategory != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8),
-                                child: Text(
-                                  context.tr('try_adjusting_filters'),
-                                  style: const TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 14,
-                                  ),
+                              const SizedBox(height: 16),
+                              Text(
+                                context.tr('no_books_found'),
+                                style: TextStyle(
+                                  color: AppColors.primaryOpacity70,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                          ],
+                              if (_searchController.text.isNotEmpty ||
+                                  _selectedCategory != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    context.tr('try_adjusting_filters'),
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       );
                     }
 
-                    return AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 220),
-                      child:
-                          _isCoverOnlyView
-                              ? _buildBookCoverGrid(allBooks)
-                              : _buildBookList(allBooks),
+                    return NotificationListener<ScrollNotification>(
+                      onNotification: (notification) {
+                        if (notification.metrics.extentAfter < 420 &&
+                            state.pagination.hasNextPage &&
+                            !state.isLoadingMore) {
+                          context.read<HomeCubit>().loadNextBooksPage();
+                        }
+                        return false;
+                      },
+                      child: RefreshIndicator(
+                        color: AppColors.primary,
+                        onRefresh: _refreshBooks,
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 220),
+                          child:
+                              _isCoverOnlyView
+                                  ? _buildBookCoverGrid(
+                                    allBooks,
+                                    isLoadingMore: state.isLoadingMore,
+                                  )
+                                  : _buildBookList(
+                                    allBooks,
+                                    isLoadingMore: state.isLoadingMore,
+                                  ),
+                        ),
+                      ),
                     );
                   }
 
@@ -719,58 +935,275 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildCategorySheetOption({
+  Widget _buildOfflineDownloadsOrError(HomeError state) {
+    return FutureBuilder<List<DownloadedBook>>(
+      future: DownloadedBooksRepo().getDownloadedBooks(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          );
+        }
+
+        final downloadedBooks = snapshot.data ?? const [];
+        if (downloadedBooks.isEmpty) {
+          return _buildRefreshable(
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.wifi_off_rounded,
+                    size: 64,
+                    color: AppColors.error,
+                  ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
+                      state.message ?? context.tr('no_internet_connection'),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: AppColors.error,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: _refreshBooks,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                    ),
+                    icon: const Icon(Icons.refresh),
+                    label: Text(context.tr('retry')),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: _refreshBooks,
+          child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            itemCount: downloadedBooks.length,
+            itemBuilder: (context, index) {
+              final downloadedBook = downloadedBooks[index];
+              return DownloadedBookTile(
+                downloadedBook: downloadedBook,
+                onTap: () => _openDownloadedBook(downloadedBook),
+                onRemove: () => _removeDownloadedBook(downloadedBook),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  void _openDownloadedBook(DownloadedBook downloadedBook) {
+    Navigator.pushNamed(
+      context,
+      Routes.pdf,
+      arguments: {
+        'pdfUrl': downloadedBook.localPdfPath,
+        'title': downloadedBook.book.title,
+        'isLocal': true,
+      },
+    );
+  }
+
+  Future<void> _removeDownloadedBook(DownloadedBook downloadedBook) async {
+    await DownloadedBooksRepo().removeDownloadedBook(downloadedBook);
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(context.tr('downloaded_book_removed')),
+        backgroundColor: AppColors.error,
+      ),
+    );
+  }
+
+  Widget _buildFilterSectionHeader({
+    required IconData icon,
+    required String label,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: AppColors.primary),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFilterChoiceChip({
     required String label,
     required bool isSelected,
     required VoidCallback onTap,
+    int? count,
+    bool isWide = false,
   }) {
     return Material(
       color: isSelected ? AppColors.primaryOpacity10 : AppColors.surfaceLight,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(10),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color:
-                  isSelected ? AppColors.primary : AppColors.primaryOpacity20,
-            ),
+        borderRadius: BorderRadius.circular(10),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: 42,
+            maxWidth: isWide ? double.infinity : 240,
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 15,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+          child: Container(
+            width: isWide ? double.infinity : null,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color:
+                    isSelected ? AppColors.primary : AppColors.primaryOpacity20,
+                width: isSelected ? 1.4 : 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: isWide ? MainAxisSize.max : MainAxisSize.min,
+              children: [
+                Icon(
+                  isSelected
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  color:
+                      isSelected ? AppColors.primary : AppColors.textSecondary,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight:
+                          isSelected ? FontWeight.w800 : FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-              Icon(
-                isSelected
-                    ? Icons.radio_button_checked_rounded
-                    : Icons.radio_button_unchecked_rounded,
-                color: isSelected ? AppColors.primary : AppColors.textSecondary,
-                size: 20,
-              ),
-            ],
+                if (count != null && count > 0) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color:
+                          isSelected
+                              ? AppColors.primary
+                              : AppColors.primaryOpacity10,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '$count',
+                      style: TextStyle(
+                        color: isSelected ? AppColors.white : AppColors.primary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildBookList(List<BooksResponse?> allBooks) {
+  Widget _buildEmptyFilterHint(String label) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.primaryOpacity10,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.primaryOpacity20),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.info_outline_rounded,
+            color: AppColors.textSecondary,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRefreshable(Widget child) {
+    return RefreshIndicator(
+      color: AppColors.primary,
+      onRefresh: _refreshBooks,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: child,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildBookList(
+    List<BooksResponse?> allBooks, {
+    bool isLoadingMore = false,
+  }) {
     return ListView.builder(
       key: const PageStorageKey('home-book-list'),
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
-      itemCount: allBooks.length,
+      itemCount: allBooks.length + (isLoadingMore ? 1 : 0),
       itemBuilder: (context, index) {
+        if (index >= allBooks.length) {
+          return _buildLoadMoreIndicator();
+        }
+
         final book = allBooks[index];
         final bookId = book?.id ?? '';
         final isSaved = _savedBookIds.contains(bookId);
@@ -789,7 +1222,10 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildBookCoverGrid(List<BooksResponse?> allBooks) {
+  Widget _buildBookCoverGrid(
+    List<BooksResponse?> allBooks, {
+    bool isLoadingMore = false,
+  }) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final crossAxisCount =
@@ -803,8 +1239,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
         return GridView.builder(
           key: const PageStorageKey('home-book-cover-grid'),
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
-          itemCount: allBooks.length,
+          itemCount: allBooks.length + (isLoadingMore ? 1 : 0),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
             crossAxisSpacing: 16,
@@ -812,6 +1249,10 @@ class _HomeScreenState extends State<HomeScreen> {
             childAspectRatio: 0.64,
           ),
           itemBuilder: (context, index) {
+            if (index >= allBooks.length) {
+              return _buildLoadMoreIndicator();
+            }
+
             final book = allBooks[index];
             final bookId = book?.id ?? '';
 
@@ -825,19 +1266,35 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _openBookDetails(String bookId) {
+  Widget _buildLoadMoreIndicator() {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: AppColors.primary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openBookDetails(String bookId) async {
     if (bookId.isEmpty) {
       return;
     }
 
-    context
-        .pushNamed(
-          Routes.bookDetailsScreen,
-          arguments: {
-            'id': bookId,
-            'isSaved': _savedBookIds.contains(bookId),
-          },
-        )
-        .then((_) => _loadSavedBookIds());
+    final didChange = await context.pushNamed(
+      Routes.bookDetailsScreen,
+      arguments: {'id': bookId, 'isSaved': _savedBookIds.contains(bookId)},
+    );
+
+    await _loadSavedBookIds();
+    if (didChange == true && mounted) {
+      await _refreshBooks();
+    }
   }
 }

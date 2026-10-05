@@ -7,5 +7,5 @@ class Routes {
   static const String bookDetailsScreen = '/bookDetailsScreen';
   static const String pdf = '/pdf_reader';
   static const String favoriteBooksScreen = '/favoriteBooksScreen';
-
+  static const String downloadedBooksScreen = '/downloadedBooksScreen';
 }

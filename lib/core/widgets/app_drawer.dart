@@ -29,7 +29,8 @@ class AppDrawer extends StatelessWidget {
             future: getUserData(),
             builder: (context, snapshot) {
               final userData = snapshot.data ?? {'name': '', 'email': ''};
-              final isLoading = snapshot.connectionState == ConnectionState.waiting;
+              final isLoading =
+                  snapshot.connectionState == ConnectionState.waiting;
 
               return Container(
                 width: double.infinity,
@@ -38,10 +39,7 @@ class AppDrawer extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      AppColors.primary,
-                      AppColors.primaryDark,
-                    ],
+                    colors: [AppColors.primary, AppColors.primaryDark],
                   ),
                 ),
                 child: Column(
@@ -59,7 +57,9 @@ class AppDrawer extends StatelessWidget {
                           ),
                           child: CircleAvatar(
                             radius: 45,
-                            backgroundColor: AppColors.white.withValues(alpha: 0.2),
+                            backgroundColor: AppColors.white.withValues(
+                              alpha: 0.2,
+                            ),
                             child: Icon(
                               Icons.person_outline,
                               size: 50,
@@ -185,6 +185,17 @@ class AppDrawer extends StatelessWidget {
                 const SizedBox(height: 8),
                 _buildMenuItem(
                   context: context,
+                  icon: Icons.download_done_rounded,
+                  title: context.tr('downloaded_books'),
+                  isDarkMode: isDarkMode,
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    Navigator.pushNamed(context, Routes.downloadedBooksScreen);
+                  },
+                ),
+                const SizedBox(height: 8),
+                _buildMenuItem(
+                  context: context,
                   icon: Icons.settings_outlined,
                   title: context.tr('settings'),
                   isDarkMode: isDarkMode,
@@ -235,33 +246,42 @@ class AppDrawer extends StatelessWidget {
 
                     return _buildMenuItem(
                       context: context,
-                      icon: isLoggedIn ? Icons.logout_outlined : Icons.login_outlined,
+                      icon:
+                          isLoggedIn
+                              ? Icons.logout_outlined
+                              : Icons.login_outlined,
                       title: context.tr(isLoggedIn ? 'logout' : 'login'),
                       isDarkMode: isDarkMode,
-                      iconColor: isLoggedIn ? AppColors.error : AppColors.success,
+                      iconColor:
+                          isLoggedIn ? AppColors.error : AppColors.success,
                       onTap: () async {
                         Navigator.of(context).pop();
                         if (isLoggedIn) {
                           // Show confirmation dialog before logout
                           final shouldLogout = await showDialog<bool>(
                             context: context,
-                            builder: (context) => AlertDialog(
-                              title: Text(context.tr('logout')),
-                              content: Text(context.tr('logout_confirmation')),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context, false),
-                                  child: Text(context.tr('cancel')),
-                                ),
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context, true),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: AppColors.error,
+                            builder:
+                                (context) => AlertDialog(
+                                  title: Text(context.tr('logout')),
+                                  content: Text(
+                                    context.tr('logout_confirmation'),
                                   ),
-                                  child: Text(context.tr('logout')),
+                                  actions: [
+                                    TextButton(
+                                      onPressed:
+                                          () => Navigator.pop(context, false),
+                                      child: Text(context.tr('cancel')),
+                                    ),
+                                    TextButton(
+                                      onPressed:
+                                          () => Navigator.pop(context, true),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: AppColors.error,
+                                      ),
+                                      child: Text(context.tr('logout')),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
                           );
 
                           if (shouldLogout == true) {
@@ -284,8 +304,6 @@ class AppDrawer extends StatelessWidget {
               ],
             ),
           ),
-
-
         ],
       ),
     );
@@ -312,11 +330,7 @@ class AppDrawer extends StatelessWidget {
             color: (iconColor ?? AppColors.primary).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(
-            icon,
-            color: iconColor ?? AppColors.primary,
-            size: 24,
-          ),
+          child: Icon(icon, color: iconColor ?? AppColors.primary, size: 24),
         ),
         title: Text(
           title,
@@ -333,9 +347,7 @@ class AppDrawer extends StatelessWidget {
         ),
         onTap: onTap,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         hoverColor: AppColors.primary.withValues(alpha: 0.05),
       ),
     );

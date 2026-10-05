@@ -53,7 +53,7 @@ class BookCard extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            book?.title ?? "No Title",
+                            book?.title ?? context.tr('no_title'),
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -76,7 +76,7 @@ class BookCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${context.tr('by')} ${book?.author ?? "Unknown"}',
+                      '${context.tr('by')} ${book?.author ?? context.tr('unknown')}',
                       style: const TextStyle(
                         fontSize: 14,
                         color: AppColors.textSecondary,
@@ -95,7 +95,10 @@ class BookCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          book?.category ?? "Uncategorized",
+                          [book?.category, book?.subCategory]
+                              .whereType<String>()
+                              .where((v) => v.isNotEmpty)
+                              .join(' / '),
                           style: const TextStyle(
                             fontSize: 12,
                             color: AppColors.primary,
@@ -106,7 +109,8 @@ class BookCard extends StatelessWidget {
                     if ((book?.category ?? "").isNotEmpty)
                       const SizedBox(height: 8),
                     Text(
-                      book?.description ?? "No description available.",
+                      book?.description ??
+                          context.tr('no_description_available'),
                       style: const TextStyle(
                         fontSize: 13,
                         color: AppColors.textSecondary,

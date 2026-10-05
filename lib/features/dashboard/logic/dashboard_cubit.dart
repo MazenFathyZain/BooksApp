@@ -5,6 +5,8 @@ import 'package:book/features/dashboard/data/models/add_book_response.dart';
 import 'package:book/features/dashboard/data/repos/dashbaord_repo.dart';
 import 'package:meta/meta.dart';
 
+import '../../../core/networking/api_error_handler.dart';
+
 part 'dashboard_state.dart';
 
 class DashboardCubit extends Cubit<DashboardState> {
@@ -12,33 +14,37 @@ class DashboardCubit extends Cubit<DashboardState> {
   DashboardCubit(this._repo) : super(DashboardInitial());
 
   addBook(
-      String title,
-      String author,
-      String category,
-      String description,
-      File? image,           // Image is optional
-      File pdf,              // PDF is required
-      File? word,            // Word is optional
-      File? doc,             // Doc is optional (not implemented)
-      File? audio,           // Audio is optional
-      int partsCount,
-      String subject,
-      String language,
-      List<String> otherNames,
-      List<String> translators,
-      String publisher,
-      String publishingPlace,
-      int publicationYear,
-      String bookVersion,
-      String century,
-      String authorDoctrine,
-      ) async {
+    String title,
+    String author,
+    String category,
+    String categoryId,
+    String? subCategoryId,
+    String description,
+    File? image, // Image is optional
+    File pdf, // PDF is required
+    File? word, // Word is optional
+    File? doc, // Doc is optional (not implemented)
+    File? audio, // Audio is optional
+    int partsCount,
+    String subject,
+    String language,
+    List<String> otherNames,
+    List<String> translators,
+    String publisher,
+    String publishingPlace,
+    int publicationYear,
+    String bookVersion,
+    String century,
+    String authorDoctrine,
+  ) async {
     emit(DashboardLoading());
     try {
       final response = await _repo.addBook(
         title,
         author,
         category,
+        categoryId,
+        subCategoryId,
         description,
         image,
         pdf,
@@ -58,7 +64,7 @@ class DashboardCubit extends Cubit<DashboardState> {
       );
       emit(DashboardSuccess(response));
     } catch (error) {
-      emit(DashboardFailed(error.toString()));
+      emit(DashboardFailed(ApiErrorFormatter.getMessage(error)));
     }
   }
 }

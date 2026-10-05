@@ -13,11 +13,18 @@ final class CategoriesLoading extends HomeState {}
 
 final class BooksLoaded extends HomeState {
   final List<BooksResponse?>? books;
-  BooksLoaded(this.books);
+  final BooksPagination pagination;
+  final bool isLoadingMore;
+
+  BooksLoaded(
+    this.books, {
+    this.pagination = const BooksPagination(),
+    this.isLoadingMore = false,
+  });
 }
 
 final class CategoriesLoaded extends HomeState {
-  final List<String> categories;
+  final List<CategoryTreeResponse> categories;
   CategoriesLoaded(this.categories);
 }
 

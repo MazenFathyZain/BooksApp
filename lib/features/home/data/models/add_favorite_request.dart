@@ -3,7 +3,5 @@ class AddFavoriteRequest {
 
   AddFavoriteRequest({required this.bookId});
 
-  Map<String, dynamic> toJson() => {
-    "bookId": bookId,
-  };
+  Map<String, dynamic> toJson() => {"bookId": bookId};
 }

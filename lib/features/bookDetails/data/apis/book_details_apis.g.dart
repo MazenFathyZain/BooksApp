@@ -46,6 +46,123 @@ class _BookDetailsApis implements BookDetailsApis {
     return _value;
   }
 
+  @override
+  Future<BooksResponse> updateBook(
+    String bookId,
+    String title,
+    String author,
+    String category,
+    String? categoryId,
+    String? subCategoryId,
+    String description,
+    File? image,
+    File? pdf,
+    File? word,
+    File? audio,
+  ) async {
+    final _extra = <String, dynamic>{};
+    final queryParameters = <String, dynamic>{};
+    final _headers = <String, dynamic>{};
+    final _data = FormData();
+    _data.fields.add(MapEntry('title', title));
+    _data.fields.add(MapEntry('author', author));
+    _data.fields.add(MapEntry('category', category));
+    if (categoryId != null) {
+      _data.fields.add(MapEntry('categoryId', categoryId));
+    }
+    if (subCategoryId != null) {
+      _data.fields.add(MapEntry('subCategoryId', subCategoryId));
+    }
+    _data.fields.add(MapEntry('description', description));
+    if (image != null) {
+      _data.files.add(
+        MapEntry(
+          'image',
+          MultipartFile.fromFileSync(
+            image.path,
+            filename: image.path.split(Platform.pathSeparator).last,
+          ),
+        ),
+      );
+    }
+    if (pdf != null) {
+      _data.files.add(
+        MapEntry(
+          'pdf',
+          MultipartFile.fromFileSync(
+            pdf.path,
+            filename: pdf.path.split(Platform.pathSeparator).last,
+          ),
+        ),
+      );
+    }
+    if (word != null) {
+      _data.files.add(
+        MapEntry(
+          'word',
+          MultipartFile.fromFileSync(
+            word.path,
+            filename: word.path.split(Platform.pathSeparator).last,
+          ),
+        ),
+      );
+    }
+    if (audio != null) {
+      _data.files.add(
+        MapEntry(
+          'audio',
+          MultipartFile.fromFileSync(
+            audio.path,
+            filename: audio.path.split(Platform.pathSeparator).last,
+          ),
+        ),
+      );
+    }
+    final _options = _setStreamType<BooksResponse>(
+      Options(
+            method: 'PUT',
+            headers: _headers,
+            extra: _extra,
+            contentType: 'multipart/form-data',
+          )
+          .compose(
+            _dio.options,
+            '/books/${bookId}',
+            queryParameters: queryParameters,
+            data: _data,
+          )
+          .copyWith(baseUrl: _combineBaseUrls(_dio.options.baseUrl, baseUrl)),
+    );
+    final _result = await _dio.fetch<Map<String, dynamic>>(_options);
+    late BooksResponse _value;
+    try {
+      _value = BooksResponse.fromJson(_result.data!);
+    } on Object catch (e, s) {
+      errorLogger?.logError(e, s, _options);
+      rethrow;
+    }
+    return _value;
+  }
+
+  @override
+  Future<void> deleteBook(String bookId) async {
+    final _extra = <String, dynamic>{};
+    final queryParameters = <String, dynamic>{};
+    final _headers = <String, dynamic>{};
+    const Map<String, dynamic>? _data = null;
+    final _options = _setStreamType<void>(
+      Options(method: 'DELETE', headers: _headers, extra: _extra)
+          .compose(
+            _dio.options,
+            '/books/${bookId}',
+            queryParameters: queryParameters,
+            data: _data,
+          )
+          .copyWith(baseUrl: _combineBaseUrls(_dio.options.baseUrl, baseUrl)),
+    );
+    await _dio.fetch<void>(_options);
+  }
+
   RequestOptions _setStreamType<T>(RequestOptions requestOptions) {
     if (T != dynamic &&
         !(requestOptions.responseType == ResponseType.bytes ||

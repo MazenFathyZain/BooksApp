@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/helpers/constants.dart';
 import '../../../core/helpers/shared_pref_helper.dart';
+import '../../../core/networking/api_error_handler.dart';
 import '../../../core/networking/dio_factory.dart';
 import '../data/models/auth_response_model.dart';
 
@@ -26,16 +27,16 @@ class AuthCubit extends Cubit<AuthState> {
       await saveUserToken(response.token, response.role);
       emit(AuthLoginSuccess(response));
     } catch (e) {
-      emit(AuthError(e.toString()));
+      emit(AuthError(ApiErrorFormatter.getMessage(e)));
     }
   }
 
   Future<void> register(
-      String name,
-      String email,
-      String password,
-      String role,
-      ) async {
+    String name,
+    String email,
+    String password,
+    String role,
+  ) async {
     emit(AuthLoading());
 
     try {
@@ -50,9 +51,10 @@ class AuthCubit extends Cubit<AuthState> {
 
       emit(AuthRegisterSuccess(response));
     } catch (e) {
-      emit(AuthError(e.toString()));
+      emit(AuthError(ApiErrorFormatter.getMessage(e)));
     }
   }
+
   Future<void> saveUserToken(String token, String role) async {
     await SharedPrefHelper.setSecuredString(AppConstants.userToken, token);
     await SharedPrefHelper.setSecuredString(AppConstants.userRole, role);

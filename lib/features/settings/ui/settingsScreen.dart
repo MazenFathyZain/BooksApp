@@ -27,9 +27,7 @@ class SettingsScreen extends StatelessWidget {
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
-        children: [
-          _buildLanguageSection(context),
-        ],
+        children: [_buildLanguageSection(context)],
       ),
     );
   }
@@ -47,16 +45,13 @@ class SettingsScreen extends StatelessWidget {
 
   Widget _buildSectionTitle(BuildContext context, String title) {
     return Padding(
-      padding: const EdgeInsets.only(left: 4),
+      padding: const EdgeInsetsDirectional.only(start: 4),
       child: Text(
         title,
         style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w600,
-          color: Theme.of(context)
-              .colorScheme
-              .onBackground
-              .withOpacity(0.8),
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
         ),
       ),
     );
@@ -74,7 +69,7 @@ class SettingsScreen extends StatelessWidget {
       },
       builder: (context, state) {
         final currentLanguage =
-        state is LocaleChanged ? state.locale.languageCode : 'en';
+            state is LocaleChanged ? state.locale.languageCode : 'tg';
 
         return Card(
           color: Colors.white,
@@ -84,41 +79,50 @@ class SettingsScreen extends StatelessWidget {
           ),
           child: Column(
             children: [
-              // _languageItem(
-              //   context,
-              //   title: context.tr('arabic'),
-              //   subtitle: 'Arabic',
-              //   flag: '🇸🇦',
-              //   code: 'ar',
-              //   selected: currentLanguage == 'ar',
-              //   isFirst: true,
-              // ),
-              // _divider(),
-              // _languageItem(
-              //   context,
-              //   title: context.tr('english'),
-              //   subtitle: 'English',
-              //   flag: '🇬🇧',
-              //   code: 'en',
-              //   selected: currentLanguage == 'en',
-              // ),
+              _languageItem(
+                context,
+                title: context.tr('tajik'),
+                subtitle: 'Tajik',
+                flag: '🇹🇯',
+                code: 'tg',
+                selected: currentLanguage == 'tg',
+                isFirst: true,
+              ),
               _divider(),
               _languageItem(
                 context,
-                title: 'Тоҷикӣ',
-                subtitle: 'Tajik',
-                flag: '🇹🇯',
+                title: context.tr('arabic'),
+                subtitle: 'Arabic',
+                flag: '🇸🇦',
+                code: 'ar',
+                selected: currentLanguage == 'ar',
+              ),
+              _divider(),
+              _languageItem(
+                context,
+                title: context.tr('persian'),
+                subtitle: 'Persian',
+                flag: '🇮🇷',
+                code: 'fa',
+                selected: currentLanguage == 'fa',
+              ),
+              _divider(),
+              _languageItem(
+                context,
+                title: context.tr('english'),
+                subtitle: 'English',
+                flag: '🇬🇧',
                 code: 'en',
                 selected: currentLanguage == 'en',
               ),
               _divider(),
               _languageItem(
                 context,
-                title: 'Русский',
+                title: context.tr('russian'),
                 subtitle: 'Russian',
                 flag: '🇷🇺',
-                code: 'ar',
-                selected: currentLanguage == 'ar',
+                code: 'ru',
+                selected: currentLanguage == 'ru',
                 isLast: true,
               ),
             ],
@@ -129,15 +133,15 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Widget _languageItem(
-      BuildContext context, {
-        required String title,
-        required String subtitle,
-        required String flag,
-        required String code,
-        required bool selected,
-        bool isFirst = false,
-        bool isLast = false,
-      }) {
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required String flag,
+    required String code,
+    required bool selected,
+    bool isFirst = false,
+    bool isLast = false,
+  }) {
     return InkWell(
       onTap: () => context.read<LocaleCubit>().changeLocale(code),
       borderRadius: BorderRadius.vertical(
@@ -164,20 +168,13 @@ class SettingsScreen extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade600,
-                    ),
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                   ),
                 ],
               ),
             ),
             if (selected)
-              const Icon(
-                Icons.check_circle,
-                color: Colors.green,
-                size: 24,
-              ),
+              const Icon(Icons.check_circle, color: Colors.green, size: 24),
           ],
         ),
       ),
@@ -189,17 +186,13 @@ class SettingsScreen extends StatelessWidget {
       width: 44,
       height: 44,
       decoration: BoxDecoration(
-        color: Colors.grey.withOpacity(0.1),
+        color: Colors.grey.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
       ),
       alignment: Alignment.center,
-      child: Text(
-        emoji,
-        style: const TextStyle(fontSize: 20),
-      ),
+      child: Text(emoji, style: const TextStyle(fontSize: 20)),
     );
   }
 
-  Widget _divider() =>
-      const Divider(height: 1, indent: 16, endIndent: 16);
+  Widget _divider() => const Divider(height: 1, indent: 16, endIndent: 16);
 }

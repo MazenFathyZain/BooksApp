@@ -20,7 +20,7 @@ class _CustomPdfState extends State<CustomPdf> {
   @override
   Widget build(BuildContext context) {
     final args =
-    ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+        ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
 
     final String pdfUrl = args['pdfUrl'];
     final String title = args['title'];

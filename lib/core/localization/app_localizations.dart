@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -12,35 +11,58 @@ class AppLocalizations {
   }
 
   static const LocalizationsDelegate<AppLocalizations> delegate =
-  _AppLocalizationsDelegate();
+      _AppLocalizationsDelegate();
+
+  static const supportedLanguageCodes = ['en', 'ar', 'tg', 'ru', 'fa'];
 
   Map<String, String> _localizedStrings = {};
+  Map<String, String> _fallbackStrings = {};
 
   Future<bool> load() async {
-    String jsonString = await rootBundle.loadString('assets/translations/${locale.languageCode}.json');
-    Map<String, dynamic> jsonMap = json.decode(jsonString);
+    final String jsonString = await rootBundle.loadString(
+      'assets/translations/${locale.languageCode}.json',
+    );
+    final Map<String, dynamic> jsonMap = json.decode(jsonString);
 
     _localizedStrings = jsonMap.map((key, value) {
       return MapEntry(key, value.toString());
     });
 
+    final fallbackLangCode = locale.languageCode == 'tg' ? 'en' : 'tg';
+    try {
+      final String fallbackJsonString = await rootBundle.loadString(
+        'assets/translations/$fallbackLangCode.json',
+      );
+      final Map<String, dynamic> fallbackJsonMap = json.decode(
+        fallbackJsonString,
+      );
+      _fallbackStrings = fallbackJsonMap.map((key, value) {
+        return MapEntry(key, value.toString());
+      });
+    } catch (_) {
+      _fallbackStrings = {};
+    }
+
     return true;
   }
 
   String translate(String key) {
-    return _localizedStrings[key] ?? key;
+    return _localizedStrings[key] ?? _fallbackStrings[key] ?? key;
   }
 
   // Helper method for easy access
   String get(String key) => translate(key);
 }
 
-class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
+class _AppLocalizationsDelegate
+    extends LocalizationsDelegate<AppLocalizations> {
   const _AppLocalizationsDelegate();
 
   @override
   bool isSupported(Locale locale) {
-    return ['en', 'ar'].contains(locale.languageCode);
+    return AppLocalizations.supportedLanguageCodes.contains(
+      locale.languageCode,
+    );
   }
 
   @override

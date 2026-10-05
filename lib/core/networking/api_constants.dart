@@ -2,25 +2,29 @@ class ApiConstants {
   static const String apiBaseUrl = 'http://72.60.47.238:3000/api/';
   static const int mediaPort = 9000;
 
-//   Auth
+  //   Auth
   static const String loginEP = 'auth/login';
   static const String registerEP = 'auth/register';
 
-//   Home
+  //   Home
   static const String getAllBooksEP = '/books';
   static const String getAllBooksCategoriesEP = '/books/categories';
+  static const String getCategoryTreeEP = '/categories/tree';
+  static const String categoriesEP = '/categories';
 
-//   Dashboard
+  //   Dashboard
   static const String addBook = '/admin/books';
 
-//   Book Details
+  //   Book Details
   static const String getBookById = '/books/{id}';
+  static const String updateBookById = '/books/{id}';
+  static const String deleteBookById = '/books/{id}';
 
-//   favorites
+  //   favorites
   static const String favorite = '/books/favorites';
   static const String addToFavorite = '/books/favorite';
-
 }
+
 class ApiErrors {
   static const String badRequestError = "badRequestError";
   static const String noContent = "noContent";

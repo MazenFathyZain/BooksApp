@@ -56,7 +56,7 @@ class AddBookResponse {
       id: json['_id'] as String,
       title: json['title'] as String,
       author: json['author'] as String,
-      category: json['category'] as String,
+      category: _readName(json['category']) ?? '',
       description: json['description'] as String,
       pdfUrl: json['pdfUrl'] as String?,
       wordUrl: json['wordUrl'] as String?,
@@ -65,17 +65,20 @@ class AddBookResponse {
       partsCount: json['partsCount'] != null ? json['partsCount'] as int : null,
       subject: json['subject'] as String?,
       language: json['language'] as String?,
-      otherNames: json['otherNames'] != null
-          ? List<String>.from(json['otherNames'])
-          : null,
-      translators: json['translators'] != null
-          ? List<String>.from(json['translators'])
-          : null,
+      otherNames:
+          json['otherNames'] != null
+              ? List<String>.from(json['otherNames'])
+              : null,
+      translators:
+          json['translators'] != null
+              ? List<String>.from(json['translators'])
+              : null,
       publisher: json['publisher'] as String?,
       publishingPlace: json['publishingPlace'] as String?,
-      publicationYear: json['publicationYear'] != null
-          ? json['publicationYear'] as int
-          : null,
+      publicationYear:
+          json['publicationYear'] != null
+              ? json['publicationYear'] as int
+              : null,
       bookVersion: json['bookVersion'] as String?,
       century: json['century'] as String?,
       authorDoctrine: json['authorDoctrine'] as String?,
@@ -109,5 +112,12 @@ class AddBookResponse {
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
+  }
+
+  static String? _readName(dynamic value) {
+    if (value is Map<String, dynamic>) {
+      return value['name']?.toString();
+    }
+    return value?.toString();
   }
 }

@@ -11,12 +11,26 @@ BooksResponse _$BooksResponseFromJson(Map<String, dynamic> json) =>
       id: json['_id'] as String?,
       title: json['title'] as String?,
       author: json['author'] as String?,
-      category: json['category'] as String?,
+      category: BooksResponse.readName(json['category']),
+      categoryId: BooksResponse.readId(json['categoryId'] ?? json['category']),
+      subCategory: BooksResponse.readName(
+        json['subCategory'] ?? json['subcategory'],
+      ),
+      subCategoryId: BooksResponse.readId(
+        json['subCategoryId'] ?? json['subCategory'] ?? json['subcategory'],
+      ),
       description: json['description'] as String?,
       pdfUrl: json['pdfUrl'] as String?,
       wordUrl: json['wordUrl'] as String?,
       audioUrl: json['audioUrl'] as String?,
       imageUrl: json['imageUrl'] as String?,
+      pdfPagesStatus: json['pdfPagesStatus'] as String?,
+      pdfPageCount: (json['pdfPageCount'] as num?)?.toInt(),
+      pdfPagesError: json['pdfPagesError'] as String?,
+      pdfPages:
+          (json['pdfPages'] as List<dynamic>?)
+              ?.map((e) => BookPdfPage.fromJson(e as Map<String, dynamic>))
+              .toList(),
       partsCount: (json['partsCount'] as num?)?.toInt(),
       subject: json['subject'] as String?,
       language: json['language'] as String?,
@@ -46,11 +60,18 @@ Map<String, dynamic> _$BooksResponseToJson(BooksResponse instance) =>
       'title': instance.title,
       'author': instance.author,
       'category': instance.category,
+      'categoryId': instance.categoryId,
+      'subCategory': instance.subCategory,
+      'subCategoryId': instance.subCategoryId,
       'description': instance.description,
       'pdfUrl': instance.pdfUrl,
       'wordUrl': instance.wordUrl,
       'audioUrl': instance.audioUrl,
       'imageUrl': instance.imageUrl,
+      'pdfPagesStatus': instance.pdfPagesStatus,
+      'pdfPageCount': instance.pdfPageCount,
+      'pdfPagesError': instance.pdfPagesError,
+      'pdfPages': instance.pdfPages?.map((e) => e.toJson()).toList(),
       'partsCount': instance.partsCount,
       'subject': instance.subject,
       'language': instance.language,
@@ -63,4 +84,15 @@ Map<String, dynamic> _$BooksResponseToJson(BooksResponse instance) =>
       'otherNames': instance.otherNames,
       'createdAt': instance.createdAt?.toIso8601String(),
       'updatedAt': instance.updatedAt?.toIso8601String(),
+    };
+
+BookPdfPage _$BookPdfPageFromJson(Map<String, dynamic> json) => BookPdfPage(
+  pageNumber: (json['pageNumber'] as num).toInt(),
+  imageUrl: json['imageUrl'] as String,
+);
+
+Map<String, dynamic> _$BookPdfPageToJson(BookPdfPage instance) =>
+    <String, dynamic>{
+      'pageNumber': instance.pageNumber,
+      'imageUrl': instance.imageUrl,
     };

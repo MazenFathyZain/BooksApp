@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../main.dart';
+import '../helpers/extension.dart';
 
 class AppDropdown extends StatelessWidget {
 final dynamic attribute;
@@ -24,7 +24,7 @@ final void Function(String?)? onChanged;
         const SizedBox(height: 5),
         DropdownButtonFormField<String>(
           value: selectedValues![attribute.id],
-          hint: Text('Select ${attribute.attributeName}'),
+          hint: Text('${context.tr('select')} ${attribute.attributeName}'),
           isExpanded: true,
           dropdownColor: Colors.white,
           decoration: const InputDecoration(

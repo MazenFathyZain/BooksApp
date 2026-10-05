@@ -1,9 +1,14 @@
 import 'dart:io';
+import 'package:book/core/di/dependency_injection.dart';
+import 'package:book/core/helpers/book_language.dart';
 import 'package:book/core/helpers/extension.dart';
 import 'package:book/core/helpers/session_helper.dart';
 import 'package:book/core/routing/routes.dart';
 import 'package:book/features/dashboard/logic/dashboard_cubit.dart';
+import 'package:book/features/home/data/models/category_tree_response.dart';
+import 'package:book/features/home/data/repos/home_repo.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -13,10 +18,7 @@ import '../../../core/theming/app_colors.dart';
 class DashboardScreen extends StatefulWidget {
   final bool returnToHomeAfterSave;
 
-  const DashboardScreen({
-    super.key,
-    this.returnToHomeAfterSave = false,
-  });
+  const DashboardScreen({super.key, this.returnToHomeAfterSave = false});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -48,6 +50,342 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _wordFileName;
   File? _selectedAudio;
   String? _audioFileName;
+  List<CategoryTreeResponse> _availableCategories = [];
+  CategoryTreeResponse? _selectedCategory;
+  CategoryTreeResponse? _selectedSubCategory;
+  bool _isLoadingCategories = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _languageController.text = bookLanguageApiValueFromCode(
+      context.currentLanguage,
+    );
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    setState(() {
+      _isLoadingCategories = true;
+    });
+
+    try {
+      final categories = await getIt<HomeRepo>().getCategoryTree(
+        language: _languageController.text,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        final available =
+            categories.where((category) => category.name.isNotEmpty).toList()
+              ..sort((a, b) => a.name.compareTo(b.name));
+        _availableCategories = available;
+        if (_selectedCategory != null &&
+            _findCategoryById(available, _selectedCategory!.id) == null) {
+          _selectedCategory = null;
+          _selectedSubCategory = null;
+          _categoryController.clear();
+        }
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _availableCategories = [];
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingCategories = false;
+        });
+      }
+    }
+  }
+
+  CategoryTreeResponse? _findCategoryById(
+    List<CategoryTreeResponse> categories,
+    String? id,
+  ) {
+    if (id == null) {
+      return null;
+    }
+
+    for (final category in categories) {
+      if (category.id == id) {
+        return category;
+      }
+      final child = _findCategoryById(category.children, id);
+      if (child != null) {
+        return child;
+      }
+    }
+    return null;
+  }
+
+  CategoryTreeResponse? _findParentOfCategory(
+    List<CategoryTreeResponse> categories,
+    String childId,
+  ) {
+    for (final category in categories) {
+      if (category.children.any((child) => child.id == childId)) {
+        return category;
+      }
+      final parent = _findParentOfCategory(category.children, childId);
+      if (parent != null) {
+        return parent;
+      }
+    }
+    return null;
+  }
+
+  CategoryTreeResponse? _findCategoryByName(
+    List<CategoryTreeResponse> categories,
+    String name,
+  ) {
+    for (final category in categories) {
+      if (category.name == name) {
+        return category;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _createCategory({CategoryTreeResponse? parent}) async {
+    final controller = TextEditingController();
+    final createdName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        final title =
+            parent == null
+                ? dialogContext.tr('create_category')
+                : dialogContext.tr('create_sub_category');
+        void closeDialog([String? value]) {
+          FocusManager.instance.primaryFocus?.unfocus();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (dialogContext.mounted) {
+              Navigator.of(dialogContext).pop(value?.trim());
+            }
+          });
+        }
+
+        return AlertDialog(
+          title: Text(title),
+          content: CupertinoTextField(
+            controller: controller,
+            autofocus: true,
+            textInputAction: TextInputAction.done,
+            placeholder: dialogContext.tr('enter_category'),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.primaryOpacity20),
+            ),
+            style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
+            placeholderStyle: const TextStyle(
+              color: AppColors.textHint,
+              fontSize: 15,
+            ),
+            onSubmitted: closeDialog,
+          ),
+          actions: [
+            TextButton(
+              onPressed: closeDialog,
+              child: Text(dialogContext.tr('cancel')),
+            ),
+            TextButton(
+              onPressed: () => closeDialog(controller.text),
+              child: Text(dialogContext.tr('save')),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+
+    if (!mounted || createdName == null || createdName.isEmpty) {
+      return;
+    }
+
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingCategories = true;
+    });
+
+    try {
+      final created = await getIt<HomeRepo>().createCategory(
+        name: createdName,
+        parentId: parent?.id,
+        language: parent == null ? _languageController.text : null,
+      );
+      final categories = await getIt<HomeRepo>().getCategoryTree(
+        language: _languageController.text,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _availableCategories =
+            categories.where((category) => category.name.isNotEmpty).toList()
+              ..sort((a, b) => a.name.compareTo(b.name));
+
+        if (parent == null) {
+          _selectedCategory =
+              _findCategoryById(_availableCategories, created.id) ??
+              _findCategoryByName(_availableCategories, createdName);
+          _selectedSubCategory = null;
+          _categoryController.text = _selectedCategory?.name ?? createdName;
+        } else {
+          _selectedCategory =
+              _findCategoryById(_availableCategories, parent.id) ??
+              _findParentOfCategory(_availableCategories, created.id);
+          _selectedSubCategory =
+              _findCategoryById(
+                _selectedCategory?.children ?? const [],
+                created.id,
+              ) ??
+              _findCategoryByName(
+                _selectedCategory?.children ?? const [],
+                createdName,
+              );
+          _categoryController.text = _selectedCategory?.name ?? parent.name;
+        }
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.tr('category_created')),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingCategories = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteCategory(
+    CategoryTreeResponse category, {
+    required bool isSubCategory,
+  }) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Text(dialogContext.tr('delete')),
+            content: Text(
+              isSubCategory
+                  ? dialogContext.tr('delete_sub_category_confirmation')
+                  : dialogContext.tr('delete_category_confirmation'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: Text(dialogContext.tr('cancel')),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                child: Text(dialogContext.tr('delete')),
+              ),
+            ],
+          ),
+    );
+
+    if (shouldDelete != true || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingCategories = true;
+    });
+
+    try {
+      if (isSubCategory) {
+        await getIt<HomeRepo>().deleteSubCategory(category.id);
+      } else {
+        await getIt<HomeRepo>().deleteCategory(category.id);
+      }
+
+      final categories = await getIt<HomeRepo>().getCategoryTree(
+        language: _languageController.text,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _availableCategories =
+            categories.where((item) => item.name.isNotEmpty).toList()
+              ..sort((a, b) => a.name.compareTo(b.name));
+
+        if (isSubCategory) {
+          if (_selectedSubCategory?.id == category.id) {
+            _selectedSubCategory = null;
+          }
+          if (_selectedCategory != null) {
+            _selectedCategory = _findCategoryById(
+              _availableCategories,
+              _selectedCategory!.id,
+            );
+          }
+        } else if (_selectedCategory?.id == category.id) {
+          _selectedCategory = null;
+          _selectedSubCategory = null;
+          _categoryController.clear();
+        }
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isSubCategory
+                  ? context.tr('sub_category_deleted')
+                  : context.tr('category_deleted'),
+            ),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingCategories = false;
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -173,29 +511,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
 
       // Parse other names (comma-separated)
-      List<String> otherNames = _otherNamesController.text
-          .split(',')
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .toList();
+      List<String> otherNames =
+          _otherNamesController.text
+              .split(',')
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toList();
 
       // Parse translators (comma-separated)
-      List<String> translators = _translatorsController.text
-          .split(',')
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .toList();
+      List<String> translators =
+          _translatorsController.text
+              .split(',')
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toList();
 
       context.read<DashboardCubit>().addBook(
         _titleController.text.trim(),
         _authorController.text.trim(),
         _categoryController.text.trim(),
+        _selectedCategory?.id ?? '',
+        _selectedSubCategory?.id,
         _descriptionController.text.trim(),
-        _selectedImage,              // ✅ Image first
-        _selectedPdf!,               // ✅ Then PDF (required)
-        _selectedWord,               // ✅ Then Word
-        null,                        // doc parameter (not implemented)
-        _selectedAudio,              // ✅ Then Audio
+        _selectedImage, // ✅ Image first
+        _selectedPdf!, // ✅ Then PDF (required)
+        _selectedWord, // ✅ Then Word
+        null, // doc parameter (not implemented)
+        _selectedAudio, // ✅ Then Audio
         int.parse(_partsCountController.text.trim()),
         _subjectController.text.trim(),
         _languageController.text.trim(),
@@ -210,6 +552,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
   }
+
   void _resetForm() {
     _titleController.clear();
     _authorController.clear();
@@ -224,6 +567,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _otherNamesController.clear();
     _categoryController.clear();
     _languageController.clear();
+    _languageController.text = bookLanguageApiValueFromCode(
+      context.currentLanguage,
+    );
     _doctrineController.clear();
     _translatorsController.clear();
     setState(() {
@@ -235,6 +581,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _wordFileName = null;
       _selectedAudio = null;
       _audioFileName = null;
+      _selectedCategory = null;
+      _selectedSubCategory = null;
     });
     _formKey.currentState?.reset();
   }
@@ -242,34 +590,372 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _showLogoutDialog() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(context.tr('logout')),
-        content: Text(context.tr('are_you_sure_logout')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              context.tr('cancel'),
-              style: const TextStyle(color: AppColors.textSecondary),
-            ),
+      builder:
+          (context) => AlertDialog(
+            title: Text(context.tr('logout')),
+            content: Text(context.tr('are_you_sure_logout')),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  context.tr('cancel'),
+                  style: const TextStyle(color: AppColors.textSecondary),
+                ),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await clearSession();
+                  if (context.mounted) {
+                    context.pushNamedAndRemoveUntil(
+                      Routes.loginScreen,
+                      predicate: (route) => false,
+                    );
+                  }
+                },
+                child: Text(
+                  context.tr('logout'),
+                  style: const TextStyle(color: AppColors.error),
+                ),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () async {
-              await clearSession();
-              if (context.mounted) {
-                context.pushNamedAndRemoveUntil(
-                  Routes.loginScreen,
-                  predicate: (route) => false,
-                );
+    );
+  }
+
+  Widget _buildCategorySelector(bool isLoading) {
+    final canPickExisting = _availableCategories.isNotEmpty;
+    final selectedCategory = _selectedCategory;
+    final subCategories = selectedCategory?.children ?? const [];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          context.tr('category'),
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (canPickExisting)
+          DropdownButtonFormField<String>(
+            value: _selectedCategory?.id,
+            isExpanded: true,
+            decoration: _fieldDecoration(
+              hint: context.tr('select_category'),
+              icon: Icons.category,
+            ),
+            items: [
+              ..._availableCategories.map(
+                (category) => DropdownMenuItem<String>(
+                  value: category.id,
+                  child: Text(category.name),
+                ),
+              ),
+            ],
+            onChanged:
+                isLoading
+                    ? null
+                    : (categoryId) {
+                      final category = _findCategoryById(
+                        _availableCategories,
+                        categoryId,
+                      );
+                      setState(() {
+                        _selectedCategory = category;
+                        _selectedSubCategory = null;
+                        _categoryController.text = category?.name ?? '';
+                      });
+                    },
+            validator: (_) {
+              if (_selectedCategory == null) {
+                return context.tr('please_select_category');
               }
+              return null;
             },
-            child: Text(
-              context.tr('logout'),
-              style: const TextStyle(color: AppColors.error),
+          )
+        else if (_isLoadingCategories)
+          LinearProgressIndicator(
+            color: AppColors.primary,
+            backgroundColor: AppColors.primaryOpacity10,
+          )
+        else
+          _CustomTextField(
+            controller: _categoryController,
+            label: context.tr('category'),
+            hint: context.tr('enter_category'),
+            icon: Icons.edit,
+            enabled: !isLoading,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return context.tr('please_select_category');
+              }
+              return null;
+            },
+          ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              onPressed:
+                  isLoading || _isLoadingCategories
+                      ? null
+                      : () => _createCategory(),
+              icon: const Icon(Icons.add),
+              label: Text(context.tr('create_category')),
+            ),
+            if (selectedCategory != null)
+              OutlinedButton.icon(
+                onPressed:
+                    isLoading || _isLoadingCategories
+                        ? null
+                        : () => _deleteCategory(
+                          selectedCategory,
+                          isSubCategory: false,
+                        ),
+                icon: const Icon(Icons.delete_outline),
+                label: Text(context.tr('delete')),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.error,
+                  side: const BorderSide(color: AppColors.error),
+                ),
+              ),
+          ],
+        ),
+        if (canPickExisting && selectedCategory != null) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  context.tr('select_sub_category'),
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed:
+                    isLoading || _isLoadingCategories
+                        ? null
+                        : () => _createCategory(parent: selectedCategory),
+                icon: const Icon(Icons.add, size: 18),
+                label: Text(context.tr('create_sub_category')),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _buildSubCategoryOption(
+            label: context.tr('add_to_category_only'),
+            isSelected: _selectedSubCategory == null,
+            isEnabled: !isLoading,
+            onTap: () {
+              setState(() {
+                _selectedSubCategory = null;
+              });
+            },
+          ),
+          if (subCategories.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ...subCategories.map(
+              (subCategory) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _buildSubCategoryOption(
+                  label: subCategory.name,
+                  isSelected: _selectedSubCategory?.id == subCategory.id,
+                  isEnabled: !isLoading,
+                  onDelete:
+                      isLoading || _isLoadingCategories
+                          ? null
+                          : () =>
+                              _deleteCategory(subCategory, isSubCategory: true),
+                  onTap: () {
+                    setState(() {
+                      _selectedSubCategory = subCategory;
+                    });
+                  },
+                ),
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 8),
+            Text(
+              context.tr('no_sub_categories_available'),
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSubCategoryOption({
+    required String label,
+    required bool isSelected,
+    required bool isEnabled,
+    required VoidCallback onTap,
+    VoidCallback? onDelete,
+  }) {
+    return Material(
+      color: isSelected ? AppColors.primaryOpacity10 : AppColors.surfaceLight,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: isEnabled ? onTap : null,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color:
+                  isSelected ? AppColors.primary : AppColors.primaryOpacity20,
             ),
           ),
-        ],
+          child: Row(
+            children: [
+              Icon(
+                isSelected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color:
+                        isEnabled
+                            ? AppColors.textPrimary
+                            : AppColors.textSecondary,
+                    fontSize: 14,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ),
+              if (onDelete != null) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline),
+                  color: AppColors.error,
+                  tooltip: context.tr('delete'),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
+    );
+  }
+
+  Widget _buildLanguageDropdown(bool isLoading) {
+    final currentValue =
+        bookLanguages.any(
+              (language) => language.apiValue == _languageController.text,
+            )
+            ? _languageController.text
+            : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          context.tr('language'),
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: currentValue,
+          isExpanded: true,
+          decoration: _fieldDecoration(
+            hint: context.tr('select_language'),
+            icon: Icons.language,
+          ),
+          items:
+              bookLanguages
+                  .map(
+                    (language) => DropdownMenuItem<String>(
+                      value: language.apiValue,
+                      child: Text(localizedBookLanguageName(context, language)),
+                    ),
+                  )
+                  .toList(),
+          onChanged:
+              isLoading
+                  ? null
+                  : (value) {
+                    if (value == null) {
+                      return;
+                    }
+                    setState(() {
+                      _languageController.text = value;
+                      _selectedCategory = null;
+                      _selectedSubCategory = null;
+                      _categoryController.clear();
+                    });
+                    _loadCategories();
+                  },
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return context.tr('please_enter_language');
+            }
+            return null;
+          },
+        ),
+      ],
+    );
+  }
+
+  InputDecoration _fieldDecoration({
+    required String hint,
+    required IconData icon,
+  }) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: AppColors.textHint, fontSize: 14),
+      prefixIcon: Icon(icon, color: AppColors.primary),
+      filled: true,
+      fillColor: AppColors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: AppColors.primaryOpacity20),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: AppColors.primaryOpacity20),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.primary, width: 2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.error),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.error, width: 2),
+      ),
+      disabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: AppColors.primaryOpacity10),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     );
   }
 
@@ -389,20 +1075,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Category Field
-                    _CustomTextField(
-                      controller: _categoryController,
-                      label: context.tr('category'),
-                      hint: context.tr('enter_category'),
-                      icon: Icons.category,
-                      enabled: !isLoading,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return context.tr('please_select_category');
-                        }
-                        return null;
-                      },
-                    ),
+                    _buildCategorySelector(isLoading),
                     const SizedBox(height: 20),
 
                     // Description Field
@@ -463,20 +1136,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Language Field
-                    _CustomTextField(
-                      controller: _languageController,
-                      label: context.tr('language'),
-                      hint: context.tr('enter_language'),
-                      icon: Icons.language,
-                      enabled: !isLoading,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return context.tr('please_enter_language');
-                        }
-                        return null;
-                      },
-                    ),
+                    _buildLanguageDropdown(isLoading),
                     const SizedBox(height: 20),
 
                     // Other Names
@@ -636,9 +1296,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           color: AppColors.white,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: _selectedImage != null
-                                ? AppColors.primary
-                                : AppColors.primaryOpacity20,
+                            color:
+                                _selectedImage != null
+                                    ? AppColors.primary
+                                    : AppColors.primaryOpacity20,
                             width: _selectedImage != null ? 2 : 1,
                           ),
                         ),
@@ -670,9 +1331,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
-                                      color: _selectedImage != null
-                                          ? AppColors.primary
-                                          : AppColors.textSecondary,
+                                      color:
+                                          _selectedImage != null
+                                              ? AppColors.primary
+                                              : AppColors.textSecondary,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
@@ -729,9 +1391,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           color: AppColors.white,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: _selectedPdf != null
-                                ? AppColors.primary
-                                : AppColors.primaryOpacity20,
+                            color:
+                                _selectedPdf != null
+                                    ? AppColors.primary
+                                    : AppColors.primaryOpacity20,
                             width: _selectedPdf != null ? 2 : 1,
                           ),
                         ),
@@ -763,9 +1426,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
-                                      color: _selectedPdf != null
-                                          ? AppColors.primary
-                                          : AppColors.textSecondary,
+                                      color:
+                                          _selectedPdf != null
+                                              ? AppColors.primary
+                                              : AppColors.textSecondary,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
@@ -802,9 +1466,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           color: AppColors.white,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: _selectedWord != null
-                                ? AppColors.primary
-                                : AppColors.primaryOpacity20,
+                            color:
+                                _selectedWord != null
+                                    ? AppColors.primary
+                                    : AppColors.primaryOpacity20,
                             width: _selectedWord != null ? 2 : 1,
                           ),
                         ),
@@ -836,9 +1501,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
-                                      color: _selectedWord != null
-                                          ? AppColors.primary
-                                          : AppColors.textSecondary,
+                                      color:
+                                          _selectedWord != null
+                                              ? AppColors.primary
+                                              : AppColors.textSecondary,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
@@ -875,9 +1541,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           color: AppColors.white,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: _selectedAudio != null
-                                ? AppColors.primary
-                                : AppColors.primaryOpacity20,
+                            color:
+                                _selectedAudio != null
+                                    ? AppColors.primary
+                                    : AppColors.primaryOpacity20,
                             width: _selectedAudio != null ? 2 : 1,
                           ),
                         ),
@@ -909,9 +1576,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
-                                      color: _selectedAudio != null
-                                          ? AppColors.primary
-                                          : AppColors.textSecondary,
+                                      color:
+                                          _selectedAudio != null
+                                              ? AppColors.primary
+                                              : AppColors.textSecondary,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
@@ -952,39 +1620,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                           elevation: 2,
                         ),
-                        child: isLoading
-                            ? Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation(
-                                  AppColors.white,
+                        child:
+                            isLoading
+                                ? Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation(
+                                          AppColors.white,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      context.tr('adding_book'),
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.white,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                                : Text(
+                                  context.tr('submit'),
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.white,
+                                  ),
                                 ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              context.tr('adding_book'),
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.white,
-                              ),
-                            ),
-                          ],
-                        )
-                            : Text(
-                          context.tr('submit'),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.white,
-                          ),
-                        ),
                       ),
                     ),
                     const SizedBox(height: 32),
@@ -1077,59 +1746,36 @@ class _CustomTextField extends StatelessWidget {
           enabled: enabled,
           keyboardType: keyboardType,
           inputFormatters: inputFormatters,
-          style: const TextStyle(
-            fontSize: 15,
-            color: AppColors.textPrimary,
-          ),
+          style: const TextStyle(fontSize: 15, color: AppColors.textPrimary),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(
-              color: AppColors.textHint,
-              fontSize: 14,
-            ),
-            prefixIcon: Icon(
-              icon,
-              color: AppColors.primary,
-            ),
+            hintStyle: TextStyle(color: AppColors.textHint, fontSize: 14),
+            prefixIcon: Icon(icon, color: AppColors.primary),
             filled: true,
             fillColor: AppColors.white,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: AppColors.primaryOpacity20,
-              ),
+              borderSide: BorderSide(color: AppColors.primaryOpacity20),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: AppColors.primaryOpacity20,
-              ),
+              borderSide: BorderSide(color: AppColors.primaryOpacity20),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: AppColors.primary,
-                width: 2,
-              ),
+              borderSide: const BorderSide(color: AppColors.primary, width: 2),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: AppColors.error,
-              ),
+              borderSide: const BorderSide(color: AppColors.error),
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: AppColors.error,
-                width: 2,
-              ),
+              borderSide: const BorderSide(color: AppColors.error, width: 2),
             ),
             disabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: AppColors.primaryOpacity10,
-              ),
+              borderSide: BorderSide(color: AppColors.primaryOpacity10),
             ),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,

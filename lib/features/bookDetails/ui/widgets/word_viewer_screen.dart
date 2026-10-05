@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../../../core/helpers/extension.dart';
 import '../../../../core/theming/app_colors.dart';
 import '../../../../core/helpers/media_url_helper.dart';
 
@@ -21,19 +22,22 @@ class _WordViewerScreenState extends State<WordViewerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     final String wordUrl = args?['wordUrl'] as String? ?? '';
-    final String bookTitle = args?['title'] as String? ?? 'Word Viewer';
+    final String bookTitle =
+        args?['title'] as String? ?? context.tr('word_viewer');
 
     if (wordUrl.isEmpty) {
       return Scaffold(
         appBar: AppBar(title: Text(bookTitle)),
-        body: const Center(child: Text('Word document URL not provided')),
+        body: Center(child: Text(context.tr('word_url_not_provided'))),
       );
     }
 
     // Use Google Docs Viewer to display Word files
-    final String viewerUrl = 'https://docs.google.com/viewer?url=$wordUrl&embedded=true';
+    final String viewerUrl =
+        'https://docs.google.com/viewer?url=$wordUrl&embedded=true';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -81,7 +85,7 @@ class _WordViewerScreenState extends State<WordViewerScreen> {
                     ElevatedButton.icon(
                       onPressed: () => _downloadWord(wordUrl, bookTitle),
                       icon: const Icon(Icons.download),
-                      label: const Text('Download Document'),
+                      label: Text(context.tr('download_document')),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                       ),
@@ -123,8 +127,9 @@ class _WordViewerScreenState extends State<WordViewerScreen> {
                 }
                 setState(() {
                   _isLoading = false;
-                  _errorMessage =
-                      'Failed to load document. You can download it instead.';
+                  _errorMessage = context.tr(
+                    'document_load_failed_download_instead',
+                  );
                 });
               },
             ),
@@ -142,8 +147,8 @@ class _WordViewerScreenState extends State<WordViewerScreen> {
                     const SizedBox(height: 16),
                     Text(
                       _progress > 0
-                          ? 'Loading... ${(_progress * 100).toInt()}%'
-                          : 'Loading document...',
+                          ? '${context.tr('loading')} ${(_progress * 100).toInt()}%'
+                          : context.tr('loading_document'),
                       style: const TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 14,
@@ -164,9 +169,10 @@ class _WordViewerScreenState extends State<WordViewerScreen> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
-        ),
+        builder:
+            (context) => const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            ),
       );
 
       final resolvedUrl = resolveMediaUrl(wordUrl) ?? wordUrl;
@@ -183,7 +189,7 @@ class _WordViewerScreenState extends State<WordViewerScreen> {
       }
 
       if (directory == null) {
-        throw Exception('Could not find download directory');
+        throw Exception(context.tr('download_directory_not_found'));
       }
       await directory.create(recursive: true);
 
@@ -206,7 +212,7 @@ class _WordViewerScreenState extends State<WordViewerScreen> {
         // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Downloaded:\n$filePath'),
+            content: Text('${context.tr('downloaded')}:\n$filePath'),
             backgroundColor: AppColors.success,
             duration: const Duration(seconds: 3),
           ),
@@ -220,7 +226,7 @@ class _WordViewerScreenState extends State<WordViewerScreen> {
         // Show error message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Download failed: ${e.toString()}'),
+            content: Text('${context.tr('download_failed')}: ${e.toString()}'),
             backgroundColor: AppColors.error,
           ),
         );

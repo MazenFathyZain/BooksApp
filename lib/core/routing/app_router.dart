@@ -2,11 +2,12 @@ import 'package:book/core/routing/routes.dart';
 import 'package:book/features/auth/ui/register_screen.dart';
 import 'package:book/features/bookDetails/logic/book_details_cubit.dart';
 import 'package:book/features/bookDetails/ui/book_details_screen.dart';
-import 'package:book/features/bookDetails/ui/custom_pdf.dart';
+import 'package:book/features/bookDetails/ui/pdf_viewer_screen.dart';
 import 'package:book/features/bookDetails/ui/widgets/audio_player_screen.dart';
 import 'package:book/features/bookDetails/ui/widgets/word_viewer_screen.dart';
 import 'package:book/features/dashboard/logic/dashboard_cubit.dart';
 import 'package:book/features/dashboard/ui/dashboard_screen.dart';
+import 'package:book/features/downloads/ui/downloaded_books_screen.dart';
 import 'package:book/features/favorite/logic/favorite_cubit.dart';
 import 'package:book/features/favorite/ui/favorite_screen.dart';
 import 'package:book/features/home/logic/home_cubit.dart';
@@ -86,9 +87,17 @@ class AppRouter {
           settings: settings,
         );
       case Routes.pdf:
+        final args = settings.arguments as Map<String, dynamic>? ?? {};
+        final pdfUrl = args['pdfUrl'] as String? ?? '';
+        final title = args['title'] as String?;
+        final isLocal = args['isLocal'] as bool? ?? false;
         return MaterialPageRoute(
           builder: (BuildContext context) {
-            return CustomPdf();
+            return PdfViewerScreen(
+              pdfPath: pdfUrl,
+              isLocal: isLocal,
+              bookTitle: title,
+            );
           },
           settings: settings,
         );
@@ -102,17 +111,24 @@ class AppRouter {
           },
           settings: settings,
         );
+      case Routes.downloadedBooksScreen:
+        return MaterialPageRoute(
+          builder: (BuildContext context) {
+            return const DownloadedBooksScreen();
+          },
+          settings: settings,
+        );
       case "/audio_player":
         return MaterialPageRoute(
           builder: (BuildContext context) {
-            return  AudioPlayerScreen();
+            return AudioPlayerScreen();
           },
           settings: settings,
         );
       case "/word_viewer":
         return MaterialPageRoute(
           builder: (BuildContext context) {
-            return  WordViewerScreen();
+            return WordViewerScreen();
           },
           settings: settings,
         );

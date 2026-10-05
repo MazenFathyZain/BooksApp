@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 
+import '../../../../core/helpers/extension.dart';
 import '../../../../core/theming/app_colors.dart';
 
 class AudioPlayerScreen extends StatefulWidget {
@@ -51,7 +52,8 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
 
     // Auto-play when screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final args =
+          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
       final String audioUrl = args?['audioUrl'] as String? ?? '';
       if (audioUrl.isNotEmpty) {
         _playAudio(audioUrl);
@@ -66,7 +68,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error playing audio: $e'),
+            content: Text('${context.tr('error_playing_audio')}: $e'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -126,18 +128,20 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    final String bookTitle = args?['title'] as String? ?? 'Audio Player';
-    final String author = args?['author'] as String? ?? 'Unknown';
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final String bookTitle =
+        args?['title'] as String? ?? context.tr('audio_player');
+    final String author = args?['author'] as String? ?? context.tr('unknown');
     final String? imageUrl = args?['imageUrl'] as String?;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.primary,
-        title: const Text(
-          'Audio Player',
-          style: TextStyle(color: AppColors.white, fontSize: 18),
+        title: Text(
+          context.tr('audio_player'),
+          style: const TextStyle(color: AppColors.white, fontSize: 18),
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.white),
@@ -168,27 +172,29 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(20),
-                  child: (imageUrl != null && imageUrl.isNotEmpty)
-                      ? Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      color: AppColors.surface,
-                      child: const Icon(
-                        Icons.audiotrack,
-                        size: 100,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  )
-                      : Container(
-                    color: AppColors.surface,
-                    child: const Icon(
-                      Icons.audiotrack,
-                      size: 100,
-                      color: AppColors.primary,
-                    ),
-                  ),
+                  child:
+                      (imageUrl != null && imageUrl.isNotEmpty)
+                          ? Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder:
+                                (context, error, stackTrace) => Container(
+                                  color: AppColors.surface,
+                                  child: const Icon(
+                                    Icons.audiotrack,
+                                    size: 100,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                          )
+                          : Container(
+                            color: AppColors.surface,
+                            child: const Icon(
+                              Icons.audiotrack,
+                              size: 100,
+                              color: AppColors.primary,
+                            ),
+                          ),
                 ),
               ),
 
@@ -226,9 +232,10 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                 children: [
                   Slider(
                     value: _position.inSeconds.toDouble(),
-                    max: _duration.inSeconds.toDouble() > 0
-                        ? _duration.inSeconds.toDouble()
-                        : 1.0,
+                    max:
+                        _duration.inSeconds.toDouble() > 0
+                            ? _duration.inSeconds.toDouble()
+                            : 1.0,
                     onChanged: (value) {
                       _seekTo(Duration(seconds: value.toInt()));
                     },

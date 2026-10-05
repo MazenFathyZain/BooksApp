@@ -10,21 +10,28 @@ extension Navigation on BuildContext {
   }
 
   Future<dynamic> pushReplacementNamed(String routeName, {Object? arguments}) {
-    return Navigator.of(this)
-        .pushReplacementNamed(routeName, arguments: arguments);
+    return Navigator.of(
+      this,
+    ).pushReplacementNamed(routeName, arguments: arguments);
   }
 
-  Future<dynamic> pushNamedAndRemoveUntil(String routeName,
-      {Object? arguments, required RoutePredicate predicate}) {
-    return Navigator.of(this)
-        .pushNamedAndRemoveUntil(routeName, predicate, arguments: arguments);
+  Future<dynamic> pushNamedAndRemoveUntil(
+    String routeName, {
+    Object? arguments,
+    required RoutePredicate predicate,
+  }) {
+    return Navigator.of(
+      this,
+    ).pushNamedAndRemoveUntil(routeName, predicate, arguments: arguments);
   }
 
   void pop() => Navigator.of(this).pop;
 }
+
 extension StringExtension on String? {
   bool isNullOrEmpty() => this == null || this == "";
 }
+
 extension ListExtension<T> on List<T>? {
   bool isNullOrEmpty() => this == null || this!.isEmpty;
 }
@@ -42,17 +49,34 @@ extension LocalizationExtension on BuildContext {
     if (localeState is LocaleChanged) {
       return localeState.locale.languageCode;
     }
-    return 'en'; // default
+    return 'tg';
   }
 
-  // Check if current language is Arabic
   bool get isArabic => currentLanguage == 'ar';
 
-  // Check if current language is English
   bool get isEnglish => currentLanguage == 'en';
 
-  // Get current language display name
+  bool get isTajik => currentLanguage == 'tg';
+
+  bool get isRussian => currentLanguage == 'ru';
+
+  bool get isPersian => currentLanguage == 'fa';
+
+  bool get isRtl => isArabic || isPersian;
+
   String get currentLanguageName {
-    return currentLanguage == 'ar' ? tr('arabic') : tr('english');
+    switch (currentLanguage) {
+      case 'ar':
+        return tr('arabic');
+      case 'en':
+        return tr('english');
+      case 'fa':
+        return tr('persian');
+      case 'ru':
+        return tr('russian');
+      case 'tg':
+      default:
+        return tr('tajik');
+    }
   }
 }

@@ -24,6 +24,8 @@ class _DashboardApis implements DashboardApis {
     String title,
     String author,
     String category,
+    String categoryId,
+    String? subCategoryId,
     String description,
     File? image,
     File? pdf,
@@ -49,6 +51,10 @@ class _DashboardApis implements DashboardApis {
     _data.fields.add(MapEntry('title', title));
     _data.fields.add(MapEntry('author', author));
     _data.fields.add(MapEntry('category', category));
+    _data.fields.add(MapEntry('categoryId', categoryId));
+    if (subCategoryId != null) {
+      _data.fields.add(MapEntry('subCategoryId', subCategoryId));
+    }
     _data.fields.add(MapEntry('description', description));
     if (image != null) {
       _data.files.add(

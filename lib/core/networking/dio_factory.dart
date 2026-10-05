@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../helpers/constants.dart';
 import '../helpers/shared_pref_helper.dart';
+import '../localization/app_localizations.dart';
 
 class DioFactory {
   /// private constructor as I don't want to allow creating an instance of this class
@@ -28,23 +29,27 @@ class DioFactory {
   }
 
   static Future<void> addDioHeaders() async {
-    final savedLocale = await SharedPrefHelper.getString(AppConstants.localeKey);
-    final locale = savedLocale.isEmpty ? 'en' : savedLocale;
+    final savedLocale = await SharedPrefHelper.getString(
+      AppConstants.localeKey,
+    );
+    final locale = _resolveLanguageCode(savedLocale);
 
     dio?.options.headers = {
       'Accept': 'application/json',
       'x-lang': locale,
-      'Authorization': 'Bearer ${await SharedPrefHelper.getSecuredString(AppConstants.userToken)}',
+      'Authorization':
+          'Bearer ${await SharedPrefHelper.getSecuredString(AppConstants.userToken)}',
     };
   }
 
   static Future<void> setTokenIntoHeaderAfterLogin(String token) async {
     final prefs = await SharedPreferences.getInstance();
-    final savedLocale = prefs.getString(AppConstants.localeKey) ?? 'en';
+    final savedLocale = prefs.getString(AppConstants.localeKey);
+    final locale = _resolveLanguageCode(savedLocale);
 
     dio?.options.headers = {
       'Accept': 'application/json',
-      'x-lang': savedLocale,
+      'x-lang': locale,
       'Authorization': 'Bearer $token',
     };
   }
@@ -53,14 +58,15 @@ class DioFactory {
     dio?.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          final savedLocale =
-          await SharedPrefHelper.getString(AppConstants.localeKey);
-          final locale = savedLocale.isEmpty ? 'en' : savedLocale;
+          final savedLocale = await SharedPrefHelper.getString(
+            AppConstants.localeKey,
+          );
+          final locale = _resolveLanguageCode(savedLocale);
 
           options.headers['Accept'] = 'application/json';
           options.headers['x-lang'] = locale;
           options.headers['Authorization'] =
-          'Bearer ${await SharedPrefHelper.getSecuredString(AppConstants.userToken)}';
+              'Bearer ${await SharedPrefHelper.getSecuredString(AppConstants.userToken)}';
 
           return handler.next(options);
         },
@@ -76,4 +82,11 @@ class DioFactory {
     );
   }
 
+  static String _resolveLanguageCode(String? languageCode) {
+    if (languageCode != null &&
+        AppLocalizations.supportedLanguageCodes.contains(languageCode)) {
+      return languageCode;
+    }
+    return 'tg';
+  }
 }

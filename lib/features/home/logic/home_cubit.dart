@@ -2,74 +2,127 @@ import 'package:bloc/bloc.dart';
 import 'package:book/features/home/data/models/add_favorite_request.dart';
 import 'package:book/features/home/data/repos/home_repo.dart';
 import 'package:book/features/home/data/models/books_response.dart';
-import 'package:meta/meta.dart';
+import 'package:book/features/home/data/models/category_tree_response.dart';
+import 'package:flutter/foundation.dart';
+
+import '../../../core/helpers/book_language.dart';
+import '../../../core/networking/api_error_handler.dart';
 
 part 'home_state.dart';
 
 class HomeCubit extends Cubit<HomeState> {
   final HomeRepo _repo;
   List<BooksResponse>? _currentBooks;
+  BooksPagination _pagination = const BooksPagination();
+  String _language = bookLanguageApiValueFromCode('tg');
+  String? _currentSearch;
+  String? _currentCategoryId;
+  String? _currentSubCategoryId;
+  bool _isLoadingMore = false;
+  static const int _pageLimit = 10;
 
   HomeCubit(this._repo) : super(HomeInitial());
 
+  void setLanguageCode(String languageCode) {
+    _language = bookLanguageApiValueFromCode(languageCode);
+  }
+
   // Get all books (no filters)
   Future<void> fetchAllBooks() async {
-    emit(HomeLoading());
-    try {
-      final books = await _repo.getAllBooks(null, null);
-      _currentBooks = books;
-      emit(BooksLoaded(books));
-    } catch (e) {
-      emit(HomeError(e.toString()));
-    }
+    await _fetchBooks();
   }
 
   // Get all categories
   Future<void> fetchCategories() async {
     emit(CategoriesLoading());
     try {
-      final categories = await _repo.getAllBooksCategories();
-      // Convert dynamic list to List<String>
-      final categoryStrings = categories.map((e) => e.toString()).toList();
-      emit(CategoriesLoaded(categoryStrings));
+      final categories = await _repo.getCategoryTree(language: _language);
+      emit(CategoriesLoaded(categories));
     } catch (e) {
-      emit(HomeError(e.toString()));
+      emit(HomeError(ApiErrorFormatter.getMessage(e)));
     }
   }
 
   // Get books by category
-  Future<void> fetchBooksByCategory(String category) async {
-    emit(BooksLoading());
-    try {
-      final books = await _repo.getAllBooks(null, category);
-      _currentBooks = books;
-      emit(BooksLoaded(books));
-    } catch (e) {
-      emit(HomeError(e.toString()));
-    }
+  Future<void> fetchBooksByCategory(
+    String categoryId, {
+    String? subCategoryId,
+  }) async {
+    await _fetchBooks(categoryId: categoryId, subCategoryId: subCategoryId);
   }
 
   // Search books
   Future<void> searchBooks(String query) async {
-    emit(BooksLoading());
-    try {
-      final books = await _repo.getAllBooks(query, null);
-      _currentBooks = books;
-      emit(BooksLoaded(books));
-    } catch (e) {
-      emit(HomeError(e.toString()));
-    }
+    await _fetchBooks(search: query);
   }
 
   // Search books with category filter
-  Future<void> searchBooksInCategory(String query, String category) async {
-    emit(BooksLoading());
+  Future<void> searchBooksInCategory(
+    String query,
+    String categoryId, {
+    String? subCategoryId,
+  }) async {
+    await _fetchBooks(
+      search: query,
+      categoryId: categoryId,
+      subCategoryId: subCategoryId,
+    );
+  }
+
+  Future<void> loadNextBooksPage() async {
+    if (_isLoadingMore || !_pagination.hasNextPage) {
+      return;
+    }
+
+    _isLoadingMore = true;
+    emit(
+      BooksLoaded(_currentBooks, pagination: _pagination, isLoadingMore: true),
+    );
+
     try {
-      final books = await _repo.getAllBooks(query, category);
-      _currentBooks = books;
-      emit(BooksLoaded(books));
+      final nextPage = _pagination.currentPage + 1;
+      final response = await _repo.getAllBooks(
+        _currentSearch,
+        _currentCategoryId,
+        _currentSubCategoryId,
+        _language,
+        nextPage,
+        _pageLimit,
+      );
+      _currentBooks = [...?_currentBooks, ...response.books];
+      _pagination = response.pagination;
+      emit(BooksLoaded(_currentBooks, pagination: _pagination));
     } catch (e) {
-      emit(HomeError(e.toString()));
+      emit(HomeError(ApiErrorFormatter.getMessage(e)));
+    } finally {
+      _isLoadingMore = false;
+    }
+  }
+
+  Future<void> _fetchBooks({
+    String? search,
+    String? categoryId,
+    String? subCategoryId,
+  }) async {
+    emit(BooksLoading());
+    _currentSearch = search?.trim().isEmpty == true ? null : search;
+    _currentCategoryId = categoryId;
+    _currentSubCategoryId = subCategoryId;
+
+    try {
+      final response = await _repo.getAllBooks(
+        _currentSearch,
+        _currentCategoryId,
+        _currentSubCategoryId,
+        _language,
+        1,
+        _pageLimit,
+      );
+      _currentBooks = response.books;
+      _pagination = response.pagination;
+      emit(BooksLoaded(_currentBooks, pagination: _pagination));
+    } catch (e) {
+      emit(HomeError(ApiErrorFormatter.getMessage(e)));
     }
   }
 
@@ -80,13 +133,13 @@ class HomeCubit extends Cubit<HomeState> {
       emit(FavoriteAdded(id));
       // Re-emit current books to maintain the list state
       if (_currentBooks != null) {
-        emit(BooksLoaded(_currentBooks));
+        emit(BooksLoaded(_currentBooks, pagination: _pagination));
       }
     } catch (e) {
-      emit(FavoriteError(e.toString()));
+      emit(FavoriteError(ApiErrorFormatter.getMessage(e)));
       // Re-emit current books even if favorite failed
       if (_currentBooks != null) {
-        emit(BooksLoaded(_currentBooks));
+        emit(BooksLoaded(_currentBooks, pagination: _pagination));
       }
     }
   }
@@ -100,13 +153,13 @@ class HomeCubit extends Cubit<HomeState> {
       emit(FavoriteRemoved(id));
       // Re-emit current books to maintain the list state
       if (_currentBooks != null) {
-        emit(BooksLoaded(_currentBooks));
+        emit(BooksLoaded(_currentBooks, pagination: _pagination));
       }
     } catch (e) {
-      emit(FavoriteError(e.toString()));
+      emit(FavoriteError(ApiErrorFormatter.getMessage(e)));
       // Re-emit current books even if unfavorite failed
       if (_currentBooks != null) {
-        emit(BooksLoaded(_currentBooks));
+        emit(BooksLoaded(_currentBooks, pagination: _pagination));
       }
     }
   }

@@ -17,8 +17,6 @@ import 'package:get_it/get_it.dart';
 import '../../features/auth/data/repos/auth_repo.dart';
 import '../localization/localization_cubit.dart';
 import '../networking/dio_factory.dart';
-import '../networking/socket_service.dart';
-import '../services/location_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -27,9 +25,10 @@ Future<void> setupGetIt() async {
   Dio dio = DioFactory.getDio();
   getIt.registerLazySingleton<Dio>(() => dio);
 
-  // Register core services
-  getIt.registerLazySingleton<LocaleCubit>(() => LocaleCubit());
-  getIt.registerLazySingleton<LocationService>(() => LocationService());
+  // Register core services after reading the saved locale so the first frame
+  // starts in the user's selected language.
+  final localeCubit = await LocaleCubit.create();
+  getIt.registerLazySingleton<LocaleCubit>(() => localeCubit);
 
   // Login & Register
   getIt.registerLazySingleton<AuthApis>(() => AuthApis(dio));

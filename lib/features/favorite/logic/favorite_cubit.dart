@@ -3,19 +3,21 @@ import 'package:book/features/favorite/data/repos/favorite_repo.dart';
 import 'package:book/features/home/data/models/books_response.dart';
 import 'package:meta/meta.dart';
 
+import '../../../core/networking/api_error_handler.dart';
+
 part 'favorite_state.dart';
 
 class FavoriteCubit extends Cubit<FavoriteState> {
   final FavoriteRepo _repo;
   FavoriteCubit(this._repo) : super(FavoriteInitial());
 
-  getFavoriteBooks()async{
+  getFavoriteBooks() async {
     emit(FavoriteLoading());
-    try{
+    try {
       final response = await _repo.getFavoriteBooks();
       emit(FavoriteSuccess(response));
-    }catch(e){
-      emit(FavoriteFailed(e.toString()));
+    } catch (e) {
+      emit(FavoriteFailed(ApiErrorFormatter.getMessage(e)));
     }
   }
 }
