@@ -65,7 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _listenToConnectivity() {
     final connectivity = getIt<ConnectivityService>();
-    connectivity.isOnline().then((online) {
+    connectivity.hasInternet().then((online) {
       if (mounted) {
         setState(() => _isOffline = !online);
       }
@@ -984,10 +984,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildOfflineDownloadsOrError(HomeError state) {
     final isOffline = state.isOffline || _isOffline;
-    final title =
-        isOffline
-            ? context.tr('no_internet_title')
-            : (state.message ?? context.tr('error_occurred'));
+    final String title;
+    final String emptyHint;
+    if (isOffline) {
+      title = context.tr('no_internet_title');
+      emptyHint = context.tr('no_downloaded_books_offline');
+    } else if (state.isServerUnreachable) {
+      title = context.tr('server_unreachable');
+      emptyHint = context.tr('server_unreachable_hint');
+    } else {
+      title = state.message ?? context.tr('error_occurred');
+      emptyHint = context.tr('server_unreachable_hint');
+    }
 
     return FutureBuilder<List<DownloadedBook>>(
       future: DownloadedBooksRepo().getDownloadedBooks(),
@@ -1026,7 +1034,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      context.tr('no_downloaded_books_offline'),
+                      emptyHint,
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: AppColors.textSecondary,

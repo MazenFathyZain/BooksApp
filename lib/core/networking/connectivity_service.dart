@@ -20,6 +20,28 @@ class ConnectivityService {
     }
   }
 
+  /// Whether the internet is actually reachable, not just whether Wi-Fi or
+  /// mobile data is switched on. Used to tell "no internet" apart from "our
+  /// server is down".
+  Future<bool> hasInternet() async {
+    if (!await isOnline()) {
+      return false;
+    }
+    for (final host in const ['google.com', 'cloudflare.com']) {
+      try {
+        final result = await InternetAddress.lookup(
+          host,
+        ).timeout(const Duration(seconds: 4));
+        if (result.isNotEmpty && result.first.rawAddress.isNotEmpty) {
+          return true;
+        }
+      } catch (_) {
+        // Try the next host.
+      }
+    }
+    return false;
+  }
+
   /// Emits true when the device goes online and false when it goes offline.
   Stream<bool> get onStatusChanged =>
       _connectivity.onConnectivityChanged.map(_hasConnection).distinct();

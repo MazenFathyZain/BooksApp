@@ -35,10 +35,13 @@ class HomeCubit extends Cubit<HomeState> {
   }
 
   Future<HomeError> _errorFor(Object error) async {
-    final isOffline =
-        ConnectivityService.isConnectionError(error) ||
-        !(await _connectivity.isOnline());
-    return HomeError(ApiErrorFormatter.getMessage(error), isOffline: isOffline);
+    final isConnectionError = ConnectivityService.isConnectionError(error);
+    final hasInternet = await _connectivity.hasInternet();
+    return HomeError(
+      ApiErrorFormatter.getMessage(error),
+      isOffline: !hasInternet,
+      isServerUnreachable: hasInternet && isConnectionError,
+    );
   }
 
   void setLanguageCode(String languageCode) {

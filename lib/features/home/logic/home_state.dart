@@ -34,7 +34,14 @@ final class HomeError extends HomeState {
   /// True when the request failed because there is no internet connection.
   final bool isOffline;
 
-  HomeError(this.message, {this.isOffline = false});
+  /// True when the internet works but the library server can't be reached.
+  final bool isServerUnreachable;
+
+  HomeError(
+    this.message, {
+    this.isOffline = false,
+    this.isServerUnreachable = false,
+  });
 }
 
 final class FavoriteAdded extends HomeState {

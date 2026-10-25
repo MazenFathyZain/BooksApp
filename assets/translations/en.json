@@ -259,5 +259,7 @@
   "no_internet_title": "No internet connection",
   "showing_downloaded_books": "Showing the books you downloaded. They work without internet.",
   "no_downloaded_books_offline": "You have no downloaded books yet. Connect to the internet to download books and read them offline.",
-  "connection_restored": "Back online"
+  "connection_restored": "Back online",
+  "server_unreachable": "The library server isn't responding",
+  "server_unreachable_hint": "Your internet is working, but the library can't be loaded right now. Please try again later."
 }
