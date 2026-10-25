@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:book/core/helpers/extension.dart';
 import 'package:book/core/helpers/constants.dart';
 import 'package:book/core/helpers/shared_pref_helper.dart';
@@ -9,10 +11,12 @@ import 'package:book/features/favorite/data/repos/favorite_repo.dart';
 import 'package:book/features/home/logic/home_cubit.dart';
 import 'package:book/features/home/ui/widgets/book_card.dart';
 import 'package:book/features/home/ui/widgets/book_cover_tile.dart';
+import 'package:book/features/reading/ui/reopen_last_book.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/localization/localization_cubit.dart';
+import '../../../core/networking/connectivity_service.dart';
 import '../../../core/routing/routes.dart';
 import '../../../core/theming/app_colors.dart';
 import '../../../core/widgets/app_drawer.dart';
@@ -31,7 +35,8 @@ class _HomeScreenState extends State<HomeScreen> {
   CategoryTreeResponse? _selectedCategory;
   CategoryTreeResponse? _selectedSubCategory;
   bool _isCoverOnlyView = false;
-  bool _offlineSnackShown = false;
+  bool _isOffline = false;
+  StreamSubscription<bool>? _connectivitySubscription;
   final Set<String> _savedBookIds = {};
   List<CategoryTreeResponse> _categories = [];
 
@@ -43,12 +48,55 @@ class _HomeScreenState extends State<HomeScreen> {
     context.read<HomeCubit>().setLanguageCode(context.currentLanguage);
     context.read<HomeCubit>().fetchCategories();
     context.read<HomeCubit>().fetchAllBooks();
+    _listenToConnectivity();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        reopenBookLeftOpen(context);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _connectivitySubscription?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _listenToConnectivity() {
+    final connectivity = getIt<ConnectivityService>();
+    connectivity.isOnline().then((online) {
+      if (mounted) {
+        setState(() => _isOffline = !online);
+      }
+    });
+    _connectivitySubscription = connectivity.onStatusChanged.listen((online) {
+      if (!mounted) {
+        return;
+      }
+      final wasOffline = _isOffline;
+      setState(() => _isOffline = !online);
+
+      if (online && wasOffline) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(context.tr('connection_restored')),
+              backgroundColor: AppColors.success,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        // Reload the online library if it failed while offline.
+        if (context.read<HomeCubit>().state is HomeError) {
+          _refreshBooks();
+        }
+      }
+    });
+  }
+
+  void _openDownloadsScreen() {
+    Navigator.pushNamed(context, Routes.downloadedBooksScreen);
   }
 
   Future<void> _onSearch(String query) async {
@@ -408,7 +456,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _refreshBooks() async {
-    _offlineSnackShown = false;
     await context.read<HomeCubit>().fetchCategories();
     await _onSearch(_searchController.text);
   }
@@ -574,25 +621,10 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
           BlocListener<HomeCubit, HomeState>(
-            listenWhen:
-                (previous, current) =>
-                    current is HomeError || current is BooksLoaded,
+            listenWhen: (previous, current) => current is HomeError,
             listener: (context, state) {
-              if (state is BooksLoaded) {
-                _offlineSnackShown = false;
-                return;
-              }
-
-              if (state is HomeError && !_offlineSnackShown) {
-                _offlineSnackShown = true;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(context.tr('no_internet_connection')),
-                    backgroundColor: AppColors.error,
-                    duration: const Duration(seconds: 3),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
+              if (state is HomeError && state.isOffline && !_isOffline) {
+                setState(() => _isOffline = true);
               }
             },
           ),
@@ -833,6 +865,21 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
 
+            // Offline notice while the online list is still on screen
+            BlocBuilder<HomeCubit, HomeState>(
+              buildWhen:
+                  (previous, current) =>
+                      current is BooksLoaded ||
+                      current is BooksLoading ||
+                      current is HomeError,
+              builder: (context, state) {
+                if (!_isOffline || state is HomeError) {
+                  return const SizedBox.shrink();
+                }
+                return _OfflineStrip(onOpenDownloads: _openDownloadsScreen);
+              },
+            ),
+
             // Books List
             Expanded(
               child: BlocBuilder<HomeCubit, HomeState>(
@@ -936,6 +983,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildOfflineDownloadsOrError(HomeError state) {
+    final isOffline = state.isOffline || _isOffline;
+    final title =
+        isOffline
+            ? context.tr('no_internet_title')
+            : (state.message ?? context.tr('error_occurred'));
+
     return FutureBuilder<List<DownloadedBook>>(
       future: DownloadedBooksRepo().getDownloadedBooks(),
       builder: (context, snapshot) {
@@ -949,40 +1002,52 @@ class _HomeScreenState extends State<HomeScreen> {
         if (downloadedBooks.isEmpty) {
           return _buildRefreshable(
             Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.wifi_off_rounded,
-                    size: 64,
-                    color: AppColors.error,
-                  ),
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Text(
-                      state.message ?? context.tr('no_internet_connection'),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      isOffline
+                          ? Icons.wifi_off_rounded
+                          : Icons.cloud_off_rounded,
+                      size: 64,
+                      color: AppColors.error,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      title,
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: AppColors.error,
-                        fontSize: 16,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: _refreshBooks,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
+                    const SizedBox(height: 8),
+                    Text(
+                      context.tr('no_downloaded_books_offline'),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 14,
                       ),
                     ),
-                    icon: const Icon(Icons.refresh),
-                    label: Text(context.tr('retry')),
-                  ),
-                ],
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: _refreshBooks,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                      ),
+                      icon: const Icon(Icons.refresh),
+                      label: Text(context.tr('retry')),
+                    ),
+                  ],
+                ),
               ),
             ),
           );
@@ -994,9 +1059,16 @@ class _HomeScreenState extends State<HomeScreen> {
           child: ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
-            itemCount: downloadedBooks.length,
+            itemCount: downloadedBooks.length + 1,
             itemBuilder: (context, index) {
-              final downloadedBook = downloadedBooks[index];
+              if (index == 0) {
+                return _OfflineLibraryHeader(
+                  isOffline: isOffline,
+                  title: title,
+                  onRetry: _refreshBooks,
+                );
+              }
+              final downloadedBook = downloadedBooks[index - 1];
               return DownloadedBookTile(
                 downloadedBook: downloadedBook,
                 onTap: () => _openDownloadedBook(downloadedBook),
@@ -1017,6 +1089,7 @@ class _HomeScreenState extends State<HomeScreen> {
         'pdfUrl': downloadedBook.localPdfPath,
         'title': downloadedBook.book.title,
         'isLocal': true,
+        'bookId': downloadedBook.book.id,
       },
     );
   }
@@ -1296,5 +1369,110 @@ class _HomeScreenState extends State<HomeScreen> {
     if (didChange == true && mounted) {
       await _refreshBooks();
     }
+  }
+}
+
+/// Shown above the downloaded books when the online library can't be loaded.
+class _OfflineLibraryHeader extends StatelessWidget {
+  final bool isOffline;
+  final String title;
+  final VoidCallback onRetry;
+
+  const _OfflineLibraryHeader({
+    required this.isOffline,
+    required this.title,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isOffline ? Icons.wifi_off_rounded : Icons.cloud_off_rounded,
+            color: AppColors.error,
+            size: 30,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AppColors.error,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  context.tr('showing_downloaded_books'),
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: context.tr('retry'),
+            icon: const Icon(Icons.refresh, color: AppColors.primary),
+            onPressed: onRetry,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Thin notice shown when the connection drops while books are listed.
+class _OfflineStrip extends StatelessWidget {
+  final VoidCallback onOpenDownloads;
+
+  const _OfflineStrip({required this.onOpenDownloads});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.error,
+      child: Padding(
+        padding: const EdgeInsetsDirectional.fromSTEB(16, 4, 4, 4),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.wifi_off_rounded,
+              color: AppColors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                context.tr('no_internet_title'),
+                style: const TextStyle(
+                  color: AppColors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: onOpenDownloads,
+              style: TextButton.styleFrom(foregroundColor: AppColors.white),
+              child: Text(context.tr('downloaded_books')),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

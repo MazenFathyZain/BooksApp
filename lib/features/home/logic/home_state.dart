@@ -30,7 +30,11 @@ final class CategoriesLoaded extends HomeState {
 
 final class HomeError extends HomeState {
   final String? message;
-  HomeError(this.message);
+
+  /// True when the request failed because there is no internet connection.
+  final bool isOffline;
+
+  HomeError(this.message, {this.isOffline = false});
 }
 
 final class FavoriteAdded extends HomeState {

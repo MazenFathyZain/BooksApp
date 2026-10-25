@@ -91,12 +91,14 @@ class AppRouter {
         final pdfUrl = args['pdfUrl'] as String? ?? '';
         final title = args['title'] as String?;
         final isLocal = args['isLocal'] as bool? ?? false;
+        final bookId = args['bookId'] as String?;
         return MaterialPageRoute(
           builder: (BuildContext context) {
             return PdfViewerScreen(
               pdfPath: pdfUrl,
               isLocal: isLocal,
               bookTitle: title,
+              bookId: bookId,
             );
           },
           settings: settings,

@@ -10,12 +10,16 @@ import '../../../core/helpers/extension.dart';
 import '../../../core/helpers/media_url_helper.dart';
 import '../../../core/theming/app_colors.dart';
 import '../../home/data/models/books_response.dart';
+import '../../reading/data/reading_models.dart';
+import '../../reading/data/reading_repo.dart';
+import '../../reading/ui/reader_annotations.dart';
 
 class PagedPdfReaderScreen extends StatefulWidget {
   final String title;
   final List<BookPdfPage> pages;
   final int? totalPageCount;
   final String? originalPdfUrl;
+  final String? bookId; // Used to remember the last page, bookmarks and notes
 
   const PagedPdfReaderScreen({
     super.key,
@@ -23,24 +27,30 @@ class PagedPdfReaderScreen extends StatefulWidget {
     required this.pages,
     this.totalPageCount,
     this.originalPdfUrl,
+    this.bookId,
   });
 
   @override
   State<PagedPdfReaderScreen> createState() => _PagedPdfReaderScreenState();
 }
 
-class _PagedPdfReaderScreenState extends State<PagedPdfReaderScreen> {
-  late final PageController _pageController;
+class _PagedPdfReaderScreenState extends State<PagedPdfReaderScreen>
+    with ReaderAnnotationsMixin<PagedPdfReaderScreen> {
+  /// Created once the saved page is known, so the reader opens on it.
+  PageController? _pageController;
   int _currentIndex = 0;
   bool _showControls = true;
   bool _isDownloading = false;
   int? _sliderPreviewPage;
 
-  List<BookPdfPage> get _pages {
-    final sortedPages = [...widget.pages]
-      ..sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
-    return sortedPages;
-  }
+  late final List<BookPdfPage> _pages = [...widget.pages]
+    ..sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
+
+  @override
+  int get annotationCurrentPage => _currentPageNumber;
+
+  @override
+  void annotationGoToPage(int page) => _goToPageNumber(page);
 
   int get _totalPageCount {
     final highestLoadedPage = _pages.fold<int>(
@@ -66,21 +76,60 @@ class _PagedPdfReaderScreenState extends State<PagedPdfReaderScreen> {
   @override
   void initState() {
     super.initState();
-    _pageController = PageController();
+    bookKey = ReadingRepo.bookKeyFor(
+      bookId: widget.bookId,
+      fallback: _pages.isNotEmpty ? _pages.first.imageUrl : widget.title,
+    );
+    rememberOpenBook(
+      bookId: widget.bookId,
+      title: widget.title,
+      source: ReaderSource.pageImages,
+      path: widget.originalPdfUrl,
+      pages: _pages,
+      totalPageCount: widget.totalPageCount,
+    );
+    loadAnnotations();
+    _restoreLastPage();
+  }
+
+  Future<void> _restoreLastPage() async {
+    final savedPage = await loadSavedPage();
+    if (!mounted) {
+      return;
+    }
+    final initialIndex = savedPage == null ? 0 : _indexForPageNumber(savedPage);
+    setState(() {
+      _currentIndex = initialIndex;
+      _pageController = PageController(initialPage: initialIndex);
+    });
+    if (initialIndex > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          showResumeMessage(_currentPageNumber);
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
-    _pageController.dispose();
+    forgetOpenBook();
+    _pageController?.dispose();
     super.dispose();
   }
 
+  void _onPageChanged(int index) {
+    setState(() => _currentIndex = index);
+    saveReadingProgress(_pages[index].pageNumber, _totalPageCount);
+  }
+
   void _goToPage(int pageIndex) {
-    if (pageIndex < 0 || pageIndex >= _pages.length) {
+    final controller = _pageController;
+    if (controller == null || pageIndex < 0 || pageIndex >= _pages.length) {
       return;
     }
 
-    _pageController.animateToPage(
+    controller.animateToPage(
       pageIndex,
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
@@ -91,14 +140,21 @@ class _PagedPdfReaderScreenState extends State<PagedPdfReaderScreen> {
     if (_pages.isEmpty) {
       return;
     }
+    _goToPage(_indexForPageNumber(pageNumber));
+  }
+
+  /// Index of the loaded page closest to [pageNumber].
+  int _indexForPageNumber(int pageNumber) {
+    if (_pages.isEmpty) {
+      return 0;
+    }
 
     final normalizedPage = pageNumber.clamp(1, _totalPageCount);
     final exactIndex = _pages.indexWhere(
       (page) => page.pageNumber == normalizedPage,
     );
     if (exactIndex >= 0) {
-      _goToPage(exactIndex);
-      return;
+      return exactIndex;
     }
 
     var nearestIndex = 0;
@@ -111,7 +167,7 @@ class _PagedPdfReaderScreenState extends State<PagedPdfReaderScreen> {
       }
     }
 
-    _goToPage(nearestIndex);
+    return nearestIndex;
   }
 
   void _goToPreviousPage() {
@@ -410,6 +466,32 @@ class _PagedPdfReaderScreenState extends State<PagedPdfReaderScreen> {
                 ),
               ),
               IconButton(
+                tooltip: context.tr(
+                  isCurrentPageBookmarked ? 'remove_bookmark' : 'bookmark_page',
+                ),
+                icon: Icon(
+                  isCurrentPageBookmarked
+                      ? Icons.bookmark_rounded
+                      : Icons.bookmark_add_outlined,
+                ),
+                color:
+                    isCurrentPageBookmarked
+                        ? AppColors.secondary
+                        : AppColors.white,
+                onPressed: toggleCurrentPageBookmark,
+              ),
+              IconButton(
+                tooltip: context.tr('bookmarks_and_notes'),
+                icon: Badge(
+                  isLabelVisible: bookmarks.isNotEmpty || notes.isNotEmpty,
+                  label: Text('${bookmarks.length + notes.length}'),
+                  backgroundColor: AppColors.secondary,
+                  child: const Icon(Icons.collections_bookmark_outlined),
+                ),
+                color: AppColors.white,
+                onPressed: openAnnotationsSheet,
+              ),
+              PopupMenuButton<String>(
                 icon:
                     _isDownloading
                         ? const SizedBox(
@@ -420,19 +502,46 @@ class _PagedPdfReaderScreenState extends State<PagedPdfReaderScreen> {
                             valueColor: AlwaysStoppedAnimation(AppColors.white),
                           ),
                         )
-                        : const Icon(Icons.download),
-                color: AppColors.white,
-                onPressed:
-                    _isDownloading || widget.originalPdfUrl == null
-                        ? null
-                        : _downloadPdf,
-                tooltip: context.tr('download_pdf'),
-              ),
-              IconButton(
-                icon: const Icon(Icons.format_list_numbered),
-                color: AppColors.white,
-                onPressed: _showPageNavigator,
-                tooltip: context.tr('go_to_page'),
+                        : const Icon(Icons.more_vert, color: AppColors.white),
+                onSelected: (value) {
+                  switch (value) {
+                    case 'note':
+                      addNoteForCurrentPage();
+                    case 'go_to_page':
+                      _showPageNavigator();
+                    case 'download':
+                      _downloadPdf();
+                  }
+                },
+                itemBuilder:
+                    (context) => [
+                      PopupMenuItem(
+                        value: 'note',
+                        child: ListTile(
+                          leading: const Icon(Icons.add_comment_outlined),
+                          title: Text(context.tr('add_note')),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'go_to_page',
+                        child: ListTile(
+                          leading: const Icon(Icons.format_list_numbered),
+                          title: Text(context.tr('go_to_page')),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'download',
+                        enabled:
+                            !_isDownloading && widget.originalPdfUrl != null,
+                        child: ListTile(
+                          leading: const Icon(Icons.download),
+                          title: Text(context.tr('download_pdf')),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ],
               ),
             ],
           ),
@@ -509,6 +618,7 @@ class _PagedPdfReaderScreenState extends State<PagedPdfReaderScreen> {
   @override
   Widget build(BuildContext context) {
     final pages = _pages;
+    final pageController = _pageController;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -523,12 +633,17 @@ class _PagedPdfReaderScreenState extends State<PagedPdfReaderScreen> {
         body: Stack(
           fit: StackFit.expand,
           children: [
-            PageView.builder(
-              controller: _pageController,
-              itemCount: pages.length,
-              onPageChanged: (index) => setState(() => _currentIndex = index),
-              itemBuilder: (context, index) => _buildPage(pages[index]),
-            ),
+            if (pageController == null)
+              const Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              )
+            else
+              PageView.builder(
+                controller: pageController,
+                itemCount: pages.length,
+                onPageChanged: _onPageChanged,
+                itemBuilder: (context, index) => _buildPage(pages[index]),
+              ),
             if (_showControls)
               Positioned(top: 0, left: 0, right: 0, child: _buildTopBar()),
             if (_showControls)

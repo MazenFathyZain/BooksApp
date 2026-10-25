@@ -13,24 +13,30 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/theming/app_colors.dart';
+import '../../reading/data/reading_models.dart';
+import '../../reading/data/reading_repo.dart';
+import '../../reading/ui/reader_annotations.dart';
 
 class PdfViewerScreen extends StatefulWidget {
   final String pdfPath;
   final bool isLocal; // true if file path, false if URL
   final String? bookTitle; // Optional book title for display
+  final String? bookId; // Used to remember the last page, bookmarks and notes
 
   const PdfViewerScreen({
     super.key,
     required this.pdfPath,
     required this.isLocal,
     this.bookTitle,
+    this.bookId,
   });
 
   @override
   State<PdfViewerScreen> createState() => _PdfViewerScreenState();
 }
 
-class _PdfViewerScreenState extends State<PdfViewerScreen> {
+class _PdfViewerScreenState extends State<PdfViewerScreen>
+    with ReaderAnnotationsMixin<PdfViewerScreen> {
   // 1.0 = fit the page naturally with no default zoom-in. The user can still
   // pinch/double-tap to zoom in from here.
   static const double _readerInitialZoom = 1.0;
@@ -50,6 +56,16 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   Offset? _pointerStartPosition;
   String? _errorMessage;
 
+  /// Page saved from the previous reading session, if any.
+  int? _resumePage;
+  bool _isProgressLoaded = false;
+
+  @override
+  int get annotationCurrentPage => _currentPage;
+
+  @override
+  void annotationGoToPage(int page) => _goToPage(page);
+
   // Tracks the last known device orientation so we can detect rotations and
   // re-align the viewer to the top of the current page afterwards.
   Orientation? _lastOrientation;
@@ -63,10 +79,36 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   @override
   void initState() {
     super.initState();
-    // Debug print to verify the PDF path
-    debugPrint('PdfViewerScreen initialized');
-    debugPrint('PDF Path: ${widget.pdfPath}');
-    debugPrint('Is Local: ${widget.isLocal}');
+    bookKey = ReadingRepo.bookKeyFor(
+      bookId: widget.bookId,
+      fallback: widget.pdfPath,
+    );
+    rememberOpenBook(
+      bookId: widget.bookId,
+      title: widget.bookTitle ?? '',
+      source: widget.isLocal ? ReaderSource.localFile : ReaderSource.networkPdf,
+      path: widget.pdfPath,
+    );
+    loadAnnotations();
+    _loadResumePage();
+  }
+
+  Future<void> _loadResumePage() async {
+    final page = await loadSavedPage();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _resumePage = page;
+      _isProgressLoaded = true;
+    });
+  }
+
+  @override
+  void dispose() {
+    forgetOpenBook();
+    _pdfViewerController.dispose();
+    super.dispose();
   }
 
   Future<void> _downloadPdf() async {
@@ -164,6 +206,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                               pdfPath: savePath,
                               isLocal: true,
                               bookTitle: widget.bookTitle,
+                              bookId: widget.bookId,
                             ),
                       ),
                     );
@@ -264,17 +307,39 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   }
 
   void _handleDocumentLoaded(PdfDocumentLoadedDetails details) {
+    final totalPages = details.document.pages.count;
+    final resumePage = _resumePage;
+    final canResume = resumePage != null && resumePage <= totalPages;
     setState(() {
-      _totalPages = details.document.pages.count;
+      _totalPages = totalPages;
       _isLoading = false;
+      if (canResume) {
+        _currentPage = resumePage;
+      }
     });
     _applyOrientationZoom(MediaQuery.orientationOf(context));
+
+    if (!canResume) {
+      return;
+    }
+    // initialPageNumber normally handles this; jump again in case the viewer
+    // opened on the first page anyway.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      if (_pdfViewerController.pageNumber != resumePage) {
+        _pdfViewerController.jumpToPage(resumePage);
+      }
+      showResumeMessage(resumePage);
+    });
   }
 
   void _handlePageChanged(PdfPageChangedDetails details) {
     setState(() {
       _currentPage = details.newPageNumber;
     });
+    saveReadingProgress(details.newPageNumber, _totalPages);
 
     if (MediaQuery.orientationOf(context) == Orientation.landscape) {
       _applyOrientationZoom(Orientation.landscape);
@@ -659,32 +724,92 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                       ),
                     ),
                   ),
-                if (!widget.isLocal)
+                if (_totalPages > 0) ...[
                   IconButton(
-                    icon:
-                        _isDownloading
-                            ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation(
-                                  AppColors.white,
-                                ),
+                    tooltip: context.tr(
+                      isCurrentPageBookmarked
+                          ? 'remove_bookmark'
+                          : 'bookmark_page',
+                    ),
+                    icon: Icon(
+                      isCurrentPageBookmarked
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_add_outlined,
+                    ),
+                    color:
+                        isCurrentPageBookmarked
+                            ? AppColors.secondary
+                            : AppColors.white,
+                    onPressed: toggleCurrentPageBookmark,
+                  ),
+                  IconButton(
+                    tooltip: context.tr('bookmarks_and_notes'),
+                    icon: Badge(
+                      isLabelVisible: bookmarks.isNotEmpty || notes.isNotEmpty,
+                      label: Text('${bookmarks.length + notes.length}'),
+                      backgroundColor: AppColors.secondary,
+                      child: const Icon(Icons.collections_bookmark_outlined),
+                    ),
+                    color: AppColors.white,
+                    onPressed: openAnnotationsSheet,
+                  ),
+                ],
+                PopupMenuButton<String>(
+                  icon:
+                      _isDownloading
+                          ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation(
+                                AppColors.white,
                               ),
-                            )
-                            : const Icon(Icons.download),
-                    color: AppColors.white,
-                    onPressed: _isDownloading ? null : _downloadPdf,
-                    tooltip: context.tr('download_pdf'),
-                  ),
-                if (_totalPages > 0)
-                  IconButton(
-                    icon: const Icon(Icons.format_list_numbered),
-                    color: AppColors.white,
-                    onPressed: _showPageNavigator,
-                    tooltip: context.tr('go_to_page'),
-                  ),
+                            ),
+                          )
+                          : const Icon(Icons.more_vert, color: AppColors.white),
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'note':
+                        addNoteForCurrentPage();
+                      case 'go_to_page':
+                        _showPageNavigator();
+                      case 'download':
+                        _downloadPdf();
+                    }
+                  },
+                  itemBuilder:
+                      (context) => [
+                        if (_totalPages > 0) ...[
+                          PopupMenuItem(
+                            value: 'note',
+                            child: ListTile(
+                              leading: const Icon(Icons.add_comment_outlined),
+                              title: Text(context.tr('add_note')),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'go_to_page',
+                            child: ListTile(
+                              leading: const Icon(Icons.format_list_numbered),
+                              title: Text(context.tr('go_to_page')),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                        ],
+                        if (!widget.isLocal)
+                          PopupMenuItem(
+                            value: 'download',
+                            enabled: !_isDownloading,
+                            child: ListTile(
+                              leading: const Icon(Icons.download),
+                              title: Text(context.tr('download_pdf')),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                      ],
+                ),
               ],
             ),
           ),
@@ -694,6 +819,11 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   }
 
   Widget _buildPdfViewer() {
+    // Wait for the saved page so the viewer can open directly on it.
+    if (!_isProgressLoaded) {
+      return const ColoredBox(color: AppColors.white);
+    }
+
     final commonKey = ValueKey('${widget.pdfPath}-${widget.isLocal}');
     final viewer =
         widget.isLocal
@@ -705,6 +835,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
               scrollDirection: PdfScrollDirection.horizontal,
               pageSpacing: 0,
               initialZoomLevel: _readerInitialZoom,
+              initialPageNumber: _resumePage ?? 1,
               canShowScrollHead: false,
               canShowScrollStatus: false,
               canShowPaginationDialog: false,
@@ -723,6 +854,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
               scrollDirection: PdfScrollDirection.horizontal,
               pageSpacing: 0,
               initialZoomLevel: _readerInitialZoom,
+              initialPageNumber: _resumePage ?? 1,
               canShowScrollHead: false,
               canShowScrollStatus: false,
               canShowPaginationDialog: false,

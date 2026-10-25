@@ -7,11 +7,13 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/helpers/book_language.dart';
 import '../../../core/networking/api_error_handler.dart';
+import '../../../core/networking/connectivity_service.dart';
 
 part 'home_state.dart';
 
 class HomeCubit extends Cubit<HomeState> {
   final HomeRepo _repo;
+  final ConnectivityService _connectivity;
   List<BooksResponse>? _currentBooks;
   BooksPagination _pagination = const BooksPagination();
   String _language = bookLanguageApiValueFromCode('tg');
@@ -21,7 +23,23 @@ class HomeCubit extends Cubit<HomeState> {
   bool _isLoadingMore = false;
   static const int _pageLimit = 10;
 
-  HomeCubit(this._repo) : super(HomeInitial());
+  HomeCubit(this._repo, this._connectivity) : super(HomeInitial());
+
+  /// Requests can finish after the home screen is closed (slow or offline
+  /// server). Drop those late results instead of crashing.
+  @override
+  void emit(HomeState state) {
+    if (!isClosed) {
+      super.emit(state);
+    }
+  }
+
+  Future<HomeError> _errorFor(Object error) async {
+    final isOffline =
+        ConnectivityService.isConnectionError(error) ||
+        !(await _connectivity.isOnline());
+    return HomeError(ApiErrorFormatter.getMessage(error), isOffline: isOffline);
+  }
 
   void setLanguageCode(String languageCode) {
     _language = bookLanguageApiValueFromCode(languageCode);
@@ -39,7 +57,7 @@ class HomeCubit extends Cubit<HomeState> {
       final categories = await _repo.getCategoryTree(language: _language);
       emit(CategoriesLoaded(categories));
     } catch (e) {
-      emit(HomeError(ApiErrorFormatter.getMessage(e)));
+      emit(await _errorFor(e));
     }
   }
 
@@ -93,7 +111,7 @@ class HomeCubit extends Cubit<HomeState> {
       _pagination = response.pagination;
       emit(BooksLoaded(_currentBooks, pagination: _pagination));
     } catch (e) {
-      emit(HomeError(ApiErrorFormatter.getMessage(e)));
+      emit(await _errorFor(e));
     } finally {
       _isLoadingMore = false;
     }
@@ -122,7 +140,7 @@ class HomeCubit extends Cubit<HomeState> {
       _pagination = response.pagination;
       emit(BooksLoaded(_currentBooks, pagination: _pagination));
     } catch (e) {
-      emit(HomeError(ApiErrorFormatter.getMessage(e)));
+      emit(await _errorFor(e));
     }
   }
 

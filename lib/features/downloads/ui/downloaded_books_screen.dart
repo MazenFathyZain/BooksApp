@@ -47,6 +47,7 @@ class _DownloadedBooksScreenState extends State<DownloadedBooksScreen> {
         'pdfUrl': downloadedBook.localPdfPath,
         'title': downloadedBook.book.title,
         'isLocal': true,
+        'bookId': downloadedBook.book.id,
       },
     );
   }

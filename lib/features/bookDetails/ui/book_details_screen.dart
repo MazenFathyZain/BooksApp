@@ -438,6 +438,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                 pages: pdfPages,
                 totalPageCount: book.pdfPageCount,
                 originalPdfUrl: resolvedPdfUrl,
+                bookId: book.id,
               ),
         ),
       );
@@ -467,7 +468,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     }
 
     if (book.pdfPagesStatus == 'failed') {
-      _openOriginalPdf(resolvedPdfUrl, title);
+      _openOriginalPdf(resolvedPdfUrl, title, book.id);
       return;
     }
 
@@ -481,7 +482,12 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
         Navigator.pushNamed(
           context,
           '/pdf_reader',
-          arguments: {'pdfUrl': cachedPath, 'title': title, 'isLocal': true},
+          arguments: {
+            'pdfUrl': cachedPath,
+            'title': title,
+            'isLocal': true,
+            'bookId': book.id,
+          },
         );
         return;
       }
@@ -509,7 +515,12 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
       Navigator.pushNamed(
         context,
         '/pdf_reader',
-        arguments: {'pdfUrl': localPath, 'title': title, 'isLocal': true},
+        arguments: {
+          'pdfUrl': localPath,
+          'title': title,
+          'isLocal': true,
+          'bookId': book.id,
+        },
       );
     } catch (e) {
       if (!mounted) {
@@ -530,11 +541,11 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     }
   }
 
-  void _openOriginalPdf(String resolvedPdfUrl, String title) {
+  void _openOriginalPdf(String resolvedPdfUrl, String title, String? bookId) {
     Navigator.pushNamed(
       context,
       '/pdf_reader',
-      arguments: {'pdfUrl': resolvedPdfUrl, 'title': title},
+      arguments: {'pdfUrl': resolvedPdfUrl, 'title': title, 'bookId': bookId},
     );
   }
 

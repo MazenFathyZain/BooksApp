@@ -16,6 +16,7 @@ import 'package:dio/dio.dart';
 import 'package:get_it/get_it.dart';
 import '../../features/auth/data/repos/auth_repo.dart';
 import '../localization/localization_cubit.dart';
+import '../networking/connectivity_service.dart';
 import '../networking/dio_factory.dart';
 
 final getIt = GetIt.instance;
@@ -30,6 +31,9 @@ Future<void> setupGetIt() async {
   final localeCubit = await LocaleCubit.create();
   getIt.registerLazySingleton<LocaleCubit>(() => localeCubit);
 
+  // Network status (used to show downloaded books when offline)
+  getIt.registerLazySingleton<ConnectivityService>(() => ConnectivityService());
+
   // Login & Register
   getIt.registerLazySingleton<AuthApis>(() => AuthApis(dio));
   getIt.registerLazySingleton<AuthRepo>(() => AuthRepo(getIt()));
@@ -38,7 +42,7 @@ Future<void> setupGetIt() async {
   // Home
   getIt.registerLazySingleton<HomeApis>(() => HomeApis(dio));
   getIt.registerLazySingleton<HomeRepo>(() => HomeRepo(getIt()));
-  getIt.registerFactory<HomeCubit>(() => HomeCubit(getIt()));
+  getIt.registerFactory<HomeCubit>(() => HomeCubit(getIt(), getIt()));
 
   // Dashboard - Now both DashboardApis and Dio are available
   getIt.registerLazySingleton<DashboardApis>(() => DashboardApis(dio));
