@@ -1,4 +1,8 @@
 import 'package:book/core/routing/routes.dart';
+import 'package:book/features/admin/ui/admin_books_screen.dart';
+import 'package:book/features/admin/ui/admin_categories_screen.dart';
+import 'package:book/features/admin/ui/admin_dashboard_screen.dart';
+import 'package:book/features/admin/ui/admin_users_screen.dart';
 import 'package:book/features/auth/ui/register_screen.dart';
 import 'package:book/features/bookDetails/logic/book_details_cubit.dart';
 import 'package:book/features/bookDetails/ui/book_details_screen.dart';
@@ -120,6 +124,29 @@ class AppRouter {
           builder: (BuildContext context) {
             return const DownloadedBooksScreen();
           },
+          settings: settings,
+        );
+      case Routes.adminDashboardScreen:
+        return MaterialPageRoute(
+          builder: (BuildContext context) => const AdminDashboardScreen(),
+          settings: settings,
+        );
+      case Routes.adminUsersScreen:
+        final initialRole = settings.arguments as String? ?? '';
+        return MaterialPageRoute(
+          builder:
+              (BuildContext context) =>
+                  AdminUsersScreen(initialRole: initialRole),
+          settings: settings,
+        );
+      case Routes.adminCategoriesScreen:
+        return MaterialPageRoute(
+          builder: (BuildContext context) => const AdminCategoriesScreen(),
+          settings: settings,
+        );
+      case Routes.adminBooksScreen:
+        return MaterialPageRoute(
+          builder: (BuildContext context) => const AdminBooksScreen(),
           settings: settings,
         );
       case Routes.chatScreen:

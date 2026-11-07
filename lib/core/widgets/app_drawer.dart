@@ -31,10 +31,6 @@ class AppDrawer extends StatelessWidget {
     }
   }
 
-  Future<Map<String, String>> getUserData() async {
-    return {'name': "", 'email': ""};
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -43,107 +39,12 @@ class AppDrawer extends StatelessWidget {
       child: Column(
         children: [
           // Header Section
-          FutureBuilder<Map<String, String>>(
-            future: getUserData(),
-            builder: (context, snapshot) {
-              final userData = snapshot.data ?? {'name': '', 'email': ''};
-              final isLoading =
-                  snapshot.connectionState == ConnectionState.waiting;
-
-              return Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(20, 60, 20, 30),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppColors.primary, AppColors.primaryDark],
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    Stack(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(3),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: AppColors.white.withValues(alpha: 0.3),
-                              width: 2,
-                            ),
-                          ),
-                          child: CircleAvatar(
-                            radius: 45,
-                            backgroundColor: AppColors.white.withValues(
-                              alpha: 0.2,
-                            ),
-                            child: Icon(
-                              Icons.person_outline,
-                              size: 50,
-                              color: AppColors.white,
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: AppColors.success,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: AppColors.white,
-                                width: 2,
-                              ),
-                            ),
-                            child: Icon(
-                              Icons.menu_book,
-                              size: 14,
-                              color: AppColors.white,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      isLoading
-                          ? context.tr('loading')
-                          : userData['name']!.isEmpty
-                          ? context.tr('guest_user')
-                          : userData['name']!,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.white,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      isLoading
-                          ? '...'
-                          : userData['email']!.isEmpty
-                          ? context.tr('browse_books')
-                          : userData['email']!,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.white.withValues(alpha: 0.9),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
+          _buildHeader(context),
 
           // Menu Items
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: const EdgeInsets.symmetric(vertical: 10),
               children: [
                 _buildMenuItem(
                   context: context,
@@ -159,7 +60,21 @@ class AppDrawer extends StatelessWidget {
                     );
                   },
                 ),
-                const SizedBox(height: 8),
+                if (isAdmin) ...[
+                  const SizedBox(height: 4),
+                  _buildMenuItem(
+                    context: context,
+                    icon: Icons.dashboard_outlined,
+                    title: context.tr('dashboard'),
+                    isDarkMode: isDarkMode,
+                    iconColor: AppColors.secondary,
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.pushNamed(context, Routes.adminDashboardScreen);
+                    },
+                  ),
+                ],
+                const SizedBox(height: 4),
                 _buildMenuItem(
                   context: context,
                   icon: Icons.bookmark_outline_rounded,
@@ -200,7 +115,7 @@ class AppDrawer extends StatelessWidget {
                     Navigator.pushNamed(context, Routes.favoriteBooksScreen);
                   },
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 _buildMenuItem(
                   context: context,
                   icon: Icons.download_done_rounded,
@@ -211,7 +126,7 @@ class AppDrawer extends StatelessWidget {
                     Navigator.pushNamed(context, Routes.downloadedBooksScreen);
                   },
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 FutureBuilder<int>(
                   future: getUnreadChatCount(),
                   builder: (context, snapshot) {
@@ -274,7 +189,7 @@ class AppDrawer extends StatelessWidget {
                     );
                   },
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 _buildMenuItem(
                   context: context,
                   icon: Icons.settings_outlined,
@@ -285,20 +200,9 @@ class AppDrawer extends StatelessWidget {
                     Navigator.pushNamed(context, Routes.settingsScreen);
                   },
                 ),
-                const SizedBox(height: 8),
-                _buildMenuItem(
-                  context: context,
-                  icon: Icons.help_outline,
-                  title: context.tr('help'),
-                  isDarkMode: isDarkMode,
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    Navigator.pushNamed(context, "");
-                  },
-                ),
 
                 const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  padding: EdgeInsets.symmetric(horizontal: 22, vertical: 8),
                   child: Divider(height: 1),
                 ),
 
@@ -390,6 +294,86 @@ class AppDrawer extends StatelessWidget {
     );
   }
 
+  Widget _buildHeader(BuildContext context) {
+    final hasName = isLoggedInUser && currentUserName.isNotEmpty;
+    final title =
+        hasName
+            ? currentUserName
+            : context.tr(isLoggedInUser ? 'my_account' : 'guest_user');
+    final subtitle =
+        isLoggedInUser && currentUserEmail.isNotEmpty
+            ? currentUserEmail
+            : context.tr('browse_books');
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        20,
+        MediaQuery.paddingOf(context).top + 20,
+        20,
+        20,
+      ),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: AlignmentDirectional.topStart,
+          end: AlignmentDirectional.bottomEnd,
+          colors: [AppColors.primary, AppColors.primaryDark],
+        ),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 28,
+            backgroundColor: AppColors.white.withValues(alpha: 0.18),
+            child:
+                hasName
+                    ? Text(
+                      currentUserName.trim().characters.first.toUpperCase(),
+                      style: const TextStyle(
+                        color: AppColors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    )
+                    : const Icon(
+                      Icons.person_outline,
+                      size: 30,
+                      color: AppColors.white,
+                    ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.white,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.white.withValues(alpha: 0.85),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMenuItem({
     required BuildContext context,
     required IconData icon,
@@ -399,51 +383,28 @@ class AppDrawer extends StatelessWidget {
     Color? iconColor,
     int badgeCount = 0,
   }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: Colors.transparent,
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: (iconColor ?? AppColors.primary).withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: iconColor ?? AppColors.primary, size: 24),
-        ),
+        leading: Icon(icon, color: iconColor ?? AppColors.primary, size: 24),
         title: Text(
           title,
           style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
             color: isDarkMode ? Colors.white : AppColors.textPrimary,
           ),
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (badgeCount > 0)
-              Padding(
-                padding: const EdgeInsetsDirectional.only(end: 8),
-                child: Badge(
+        trailing:
+            badgeCount > 0
+                ? Badge(
                   label: Text(badgeCount > 99 ? '99+' : '$badgeCount'),
                   backgroundColor: AppColors.error,
-                ),
-              ),
-            Icon(
-              Icons.arrow_forward_ios,
-              size: 16,
-              color: isDarkMode ? Colors.grey[400] : Colors.grey[400],
-            ),
-          ],
-        ),
+                )
+                : null,
         onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        hoverColor: AppColors.primary.withValues(alpha: 0.05),
       ),
     );
   }

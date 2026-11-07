@@ -549,6 +549,16 @@ class _HomeScreenState extends State<HomeScreen> {
         elevation: 0,
 
         actions: [
+          if (isAdmin)
+            IconButton(
+              tooltip: context.tr('dashboard'),
+              icon: const Icon(
+                Icons.dashboard_outlined,
+                color: AppColors.white,
+              ),
+              onPressed:
+                  () => context.pushNamed(Routes.adminDashboardScreen),
+            ),
           IconButton(
             icon: Icon(
               _isCoverOnlyView

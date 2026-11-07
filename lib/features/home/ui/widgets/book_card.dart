@@ -22,13 +22,10 @@ class BookCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
-      color: AppColors.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.only(bottom: 12),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
@@ -39,11 +36,11 @@ class BookCard extends StatelessWidget {
                 height: 120,
                 child: BookCoverImage(
                   imageUrl: book?.imageUrl,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                 ),
               ),
 
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
 
               Expanded(
                 child: Column(
@@ -56,7 +53,8 @@ class BookCard extends StatelessWidget {
                             book?.title ?? context.tr('no_title'),
                             style: const TextStyle(
                               fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w800,
+                              height: 1.25,
                               color: AppColors.textPrimary,
                             ),
                             maxLines: 2,
@@ -69,36 +67,40 @@ class BookCard extends StatelessWidget {
                             color: AppColors.primary,
                           ),
                           onPressed: onSaveToggle,
+                          tooltip: context.tr('saved_books'),
+                          visualDensity: VisualDensity.compact,
                           padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
                         ),
                       ],
                     ),
                     const SizedBox(height: 4),
                     Text(
                       '${context.tr('by')} ${book?.author ?? context.tr('unknown')}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 14,
                         color: AppColors.textSecondary,
-                        fontStyle: FontStyle.italic,
                       ),
                     ),
                     const SizedBox(height: 8),
                     if ((book?.category ?? "").isNotEmpty)
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
+                          horizontal: 10,
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
                           color: AppColors.primaryOpacity10,
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
                           [book?.category, book?.subCategory]
                               .whereType<String>()
                               .where((v) => v.isNotEmpty)
                               .join(' / '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 12,
                             color: AppColors.primary,
@@ -114,7 +116,7 @@ class BookCard extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 13,
                         color: AppColors.textSecondary,
-                        height: 1.3,
+                        height: 1.4,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,

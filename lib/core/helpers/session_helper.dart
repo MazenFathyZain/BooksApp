@@ -8,6 +8,9 @@ Future<void> restoreSessionState() async {
   updateSessionState(
     loggedIn: token.isNotEmpty,
     admin: token.isNotEmpty && role.toLowerCase() == 'admin',
+    userId: await SharedPrefHelper.getSecuredString(AppConstants.userId),
+    name: await SharedPrefHelper.getSecuredString(AppConstants.userName),
+    email: await SharedPrefHelper.getSecuredString(AppConstants.userEmail),
   );
 }
 

@@ -24,29 +24,19 @@ class AuthCubit extends Cubit<AuthState> {
       final response = await _repo.login(
         LoginRequestBody(email: email, password: password),
       );
-      await saveUserToken(response.token, response.role);
+      await saveUserSession(response);
       emit(AuthLoginSuccess(response));
     } catch (e) {
       emit(AuthError(ApiErrorFormatter.getMessage(e)));
     }
   }
 
-  Future<void> register(
-    String name,
-    String email,
-    String password,
-    String role,
-  ) async {
+  Future<void> register(String name, String email, String password) async {
     emit(AuthLoading());
 
     try {
       final response = await _repo.register(
-        RegisterRequestBody(
-          name: name,
-          email: email,
-          password: password,
-          role: role,
-        ),
+        RegisterRequestBody(name: name, email: email, password: password),
       );
 
       emit(AuthRegisterSuccess(response));
@@ -55,13 +45,19 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
-  Future<void> saveUserToken(String token, String role) async {
-    await SharedPrefHelper.setSecuredString(AppConstants.userToken, token);
-    await SharedPrefHelper.setSecuredString(AppConstants.userRole, role);
+  Future<void> saveUserSession(AuthResponseModel user) async {
+    await SharedPrefHelper.setSecuredString(AppConstants.userToken, user.token);
+    await SharedPrefHelper.setSecuredString(AppConstants.userRole, user.role);
+    await SharedPrefHelper.setSecuredString(AppConstants.userId, user.id);
+    await SharedPrefHelper.setSecuredString(AppConstants.userName, user.name);
+    await SharedPrefHelper.setSecuredString(AppConstants.userEmail, user.email);
     updateSessionState(
-      loggedIn: token.isNotEmpty,
-      admin: role.toLowerCase() == 'admin',
+      loggedIn: user.token.isNotEmpty,
+      admin: user.role.toLowerCase() == 'admin',
+      userId: user.id,
+      name: user.name,
+      email: user.email,
     );
-    await DioFactory.setTokenIntoHeaderAfterLogin(token);
+    await DioFactory.setTokenIntoHeaderAfterLogin(user.token);
   }
 }

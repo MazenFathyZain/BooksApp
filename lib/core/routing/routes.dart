@@ -9,5 +9,9 @@ class Routes {
   static const String favoriteBooksScreen = '/favoriteBooksScreen';
   static const String downloadedBooksScreen = '/downloadedBooksScreen';
   static const String chatScreen = '/chatScreen';
+  static const String adminDashboardScreen = '/adminDashboardScreen';
+  static const String adminUsersScreen = '/adminUsersScreen';
+  static const String adminCategoriesScreen = '/adminCategoriesScreen';
+  static const String adminBooksScreen = '/adminBooksScreen';
   static const String adminConversationsScreen = '/adminConversationsScreen';
 }

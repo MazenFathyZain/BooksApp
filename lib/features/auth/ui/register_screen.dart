@@ -28,7 +28,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
-  String _selectedRole = 'user';
   bool _isAnonymousLoading = false;
 
   @override
@@ -208,44 +207,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Role Selection
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: DropdownButtonFormField<String>(
-                          value: _selectedRole,
-                          decoration: InputDecoration(
-                            labelText: context.tr('account_type'),
-                            prefixIcon: const Icon(
-                              Icons.admin_panel_settings_outlined,
-                              color: AppColors.primary,
-                            ),
-                            border: InputBorder.none,
-                          ),
-                          dropdownColor: AppColors.surface,
-                          style: const TextStyle(color: AppColors.textPrimary),
-                          items: [
-                            DropdownMenuItem(
-                              value: 'user',
-                              child: Text(context.tr('user')),
-                            ),
-                            DropdownMenuItem(
-                              value: 'admin',
-                              child: Text(context.tr('admin')),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            setState(() => _selectedRole = value!);
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 16),
 
                       // Register Button
                       CustomAuthButton(
@@ -258,7 +220,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               _nameController.text.trim(),
                               _emailController.text.trim(),
                               _passwordController.text,
-                              _selectedRole,
                             );
                           }
                         },
