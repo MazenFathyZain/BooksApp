@@ -5,6 +5,8 @@ import 'package:book/features/bookDetails/ui/book_details_screen.dart';
 import 'package:book/features/bookDetails/ui/pdf_viewer_screen.dart';
 import 'package:book/features/bookDetails/ui/widgets/audio_player_screen.dart';
 import 'package:book/features/bookDetails/ui/widgets/word_viewer_screen.dart';
+import 'package:book/features/chat/ui/admin_conversations_screen.dart';
+import 'package:book/features/chat/ui/chat_screen.dart';
 import 'package:book/features/dashboard/logic/dashboard_cubit.dart';
 import 'package:book/features/dashboard/ui/dashboard_screen.dart';
 import 'package:book/features/downloads/ui/downloaded_books_screen.dart';
@@ -118,6 +120,16 @@ class AppRouter {
           builder: (BuildContext context) {
             return const DownloadedBooksScreen();
           },
+          settings: settings,
+        );
+      case Routes.chatScreen:
+        return MaterialPageRoute(
+          builder: (BuildContext context) => const ChatScreen(),
+          settings: settings,
+        );
+      case Routes.adminConversationsScreen:
+        return MaterialPageRoute(
+          builder: (BuildContext context) => const AdminConversationsScreen(),
           settings: settings,
         );
       case "/audio_player":

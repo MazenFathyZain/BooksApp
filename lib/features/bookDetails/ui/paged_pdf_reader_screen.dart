@@ -43,6 +43,16 @@ class _PagedPdfReaderScreenState extends State<PagedPdfReaderScreen>
   bool _isDownloading = false;
   int? _sliderPreviewPage;
 
+  /// True while the visible page is zoomed in. Page swipes are paused so a
+  /// one-finger drag pans around the zoomed page instead of flipping it.
+  bool _isPageZoomed = false;
+
+  /// Fingers currently touching the reader. A second finger means a pinch, so
+  /// page swipes are paused for the whole gesture and the zoom wins.
+  final Set<int> _activePointers = {};
+
+  bool get _isPageSwipeLocked => _isPageZoomed || _activePointers.length > 1;
+
   late final List<BookPdfPage> _pages = [...widget.pages]
     ..sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
 
@@ -119,7 +129,11 @@ class _PagedPdfReaderScreenState extends State<PagedPdfReaderScreen>
   }
 
   void _onPageChanged(int index) {
-    setState(() => _currentIndex = index);
+    setState(() {
+      _currentIndex = index;
+      // The newly shown page always starts at its normal size.
+      _isPageZoomed = false;
+    });
     saveReadingProgress(_pages[index].pageNumber, _totalPageCount);
   }
 
@@ -193,6 +207,46 @@ class _PagedPdfReaderScreenState extends State<PagedPdfReaderScreen>
       _goToNextPage();
     } else {
       setState(() => _showControls = !_showControls);
+    }
+  }
+
+  void _handlePageZoomChanged(bool isZoomed) {
+    if (!mounted || _isPageZoomed == isZoomed) {
+      return;
+    }
+    _updateSwipeLock(() => _isPageZoomed = isZoomed);
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    _updateSwipeLock(() => _activePointers.add(event.pointer));
+  }
+
+  void _handlePointerUp(PointerEvent event) {
+    _updateSwipeLock(() => _activePointers.remove(event.pointer));
+  }
+
+  /// Applies [change] and rebuilds only when the swipe lock flips, so pointer
+  /// events don't rebuild the reader on every touch.
+  void _updateSwipeLock(VoidCallback change) {
+    final wasLocked = _isPageSwipeLocked;
+    change();
+    if (wasLocked == _isPageSwipeLocked) {
+      return;
+    }
+    setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) => _snapToCurrentPage());
+  }
+
+  /// A drag that started just before a pinch can leave the PageView between
+  /// two pages; settle it back on the current one.
+  void _snapToCurrentPage() {
+    final controller = _pageController;
+    if (!mounted || controller == null || !controller.hasClients) {
+      return;
+    }
+    final page = controller.page;
+    if (page != null && (page - _currentIndex).abs() > 0.001) {
+      controller.jumpToPage(_currentIndex);
     }
   }
 
@@ -362,65 +416,58 @@ class _PagedPdfReaderScreenState extends State<PagedPdfReaderScreen>
   Widget _buildPage(BookPdfPage page) {
     final imageUrl = resolveMediaUrl(page.imageUrl) ?? page.imageUrl;
 
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
+    return _ZoomablePage(
+      key: ValueKey('page-${page.pageNumber}'),
       onTapUp: (details) => _handlePageTap(details.localPosition),
-      onVerticalDragEnd: _handleVerticalPageSwipe,
-      child: ColoredBox(
-        color: AppColors.white,
-        child: Center(
-          child: InteractiveViewer(
-            minScale: 1,
-            maxScale: 4,
-            child: Image.network(
-              imageUrl,
-              fit: BoxFit.contain,
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) {
-                  return child;
-                }
+      // Paused while zoomed or pinching so the drag pans the page instead.
+      onVerticalDragEnd: _isPageSwipeLocked ? null : _handleVerticalPageSwipe,
+      onZoomChanged: _handlePageZoomChanged,
+      child: Image.network(
+        imageUrl,
+        fit: BoxFit.contain,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) {
+            return child;
+          }
 
-                final expectedBytes = loadingProgress.expectedTotalBytes;
-                final progress =
-                    expectedBytes == null || expectedBytes <= 0
-                        ? null
-                        : loadingProgress.cumulativeBytesLoaded / expectedBytes;
+          final expectedBytes = loadingProgress.expectedTotalBytes;
+          final progress =
+              expectedBytes == null || expectedBytes <= 0
+                  ? null
+                  : loadingProgress.cumulativeBytesLoaded / expectedBytes;
 
-                return Center(
-                  child: CircularProgressIndicator(
-                    value: progress,
-                    color: AppColors.primary,
-                  ),
-                );
-              },
-              errorBuilder:
-                  (context, error, stackTrace) => Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.error_outline,
-                            color: AppColors.error,
-                            size: 44,
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            context.tr('failed_to_load_pdf'),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
+          return Center(
+            child: CircularProgressIndicator(
+              value: progress,
+              color: AppColors.primary,
+            ),
+          );
+        },
+        errorBuilder:
+            (context, error, stackTrace) => Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: AppColors.error,
+                      size: 44,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      context.tr('failed_to_load_pdf'),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  ),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ),
       ),
     );
   }
@@ -638,11 +685,23 @@ class _PagedPdfReaderScreenState extends State<PagedPdfReaderScreen>
                 child: CircularProgressIndicator(color: AppColors.primary),
               )
             else
-              PageView.builder(
-                controller: pageController,
-                itemCount: pages.length,
-                onPageChanged: _onPageChanged,
-                itemBuilder: (context, index) => _buildPage(pages[index]),
+              Listener(
+                behavior: HitTestBehavior.translucent,
+                onPointerDown: _handlePointerDown,
+                onPointerUp: _handlePointerUp,
+                onPointerCancel: _handlePointerUp,
+                child: PageView.builder(
+                  controller: pageController,
+                  itemCount: pages.length,
+                  // Locked while zoomed/pinching; buttons, tap zones and the
+                  // slider still change pages programmatically.
+                  physics:
+                      _isPageSwipeLocked
+                          ? const NeverScrollableScrollPhysics()
+                          : null,
+                  onPageChanged: _onPageChanged,
+                  itemBuilder: (context, index) => _buildPage(pages[index]),
+                ),
               ),
             if (_showControls)
               Positioned(top: 0, left: 0, right: 0, child: _buildTopBar()),
@@ -654,6 +713,125 @@ class _PagedPdfReaderScreenState extends State<PagedPdfReaderScreen>
                 child: _buildBottomBar(),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One page of the online reader: pinch to zoom (up to 5x), double-tap to zoom
+/// in on a spot or back out, and drag to pan while zoomed.
+class _ZoomablePage extends StatefulWidget {
+  final Widget child;
+  final GestureTapUpCallback onTapUp;
+  final GestureDragEndCallback? onVerticalDragEnd;
+  final ValueChanged<bool> onZoomChanged;
+
+  const _ZoomablePage({
+    super.key,
+    required this.child,
+    required this.onTapUp,
+    required this.onVerticalDragEnd,
+    required this.onZoomChanged,
+  });
+
+  @override
+  State<_ZoomablePage> createState() => _ZoomablePageState();
+}
+
+class _ZoomablePageState extends State<_ZoomablePage>
+    with SingleTickerProviderStateMixin {
+  static const double _minScale = 1;
+  static const double _maxScale = 5;
+  static const double _doubleTapScale = 2.5;
+
+  final TransformationController _transformationController =
+      TransformationController();
+  late final AnimationController _zoomAnimationController;
+  Animation<Matrix4>? _zoomAnimation;
+  Offset _doubleTapPosition = Offset.zero;
+  bool _isZoomed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Created eagerly: a lazy controller would first be built in dispose()
+    // for pages that were never double-tapped, which Flutter rejects.
+    _zoomAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+    )..addListener(_applyZoomAnimation);
+    _transformationController.addListener(_handleTransformChanged);
+  }
+
+  @override
+  void dispose() {
+    _zoomAnimationController.dispose();
+    _transformationController.dispose();
+    super.dispose();
+  }
+
+  void _handleTransformChanged() {
+    final isZoomed =
+        _transformationController.value.getMaxScaleOnAxis() > _minScale + 0.01;
+    if (isZoomed == _isZoomed) {
+      return;
+    }
+    _isZoomed = isZoomed;
+    widget.onZoomChanged(isZoomed);
+  }
+
+  void _applyZoomAnimation() {
+    final animation = _zoomAnimation;
+    if (animation != null) {
+      _transformationController.value = animation.value;
+    }
+  }
+
+  void _handleDoubleTap() {
+    final Matrix4 target;
+    if (_isZoomed) {
+      target = Matrix4.identity();
+    } else {
+      // Zoom in around the tapped point so it stays under the finger.
+      final position = _doubleTapPosition;
+      target =
+          Matrix4.identity()
+            ..setEntry(0, 0, _doubleTapScale)
+            ..setEntry(1, 1, _doubleTapScale)
+            ..setEntry(0, 3, -position.dx * (_doubleTapScale - 1))
+            ..setEntry(1, 3, -position.dy * (_doubleTapScale - 1));
+    }
+
+    _zoomAnimation = Matrix4Tween(
+      begin: _transformationController.value,
+      end: target,
+    ).animate(
+      CurvedAnimation(parent: _zoomAnimationController, curve: Curves.easeOut),
+    );
+    _zoomAnimationController.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTapUp: widget.onTapUp,
+      onDoubleTapDown: (details) => _doubleTapPosition = details.localPosition,
+      onDoubleTap: _handleDoubleTap,
+      onVerticalDragEnd: widget.onVerticalDragEnd,
+      child: ColoredBox(
+        color: AppColors.white,
+        // Fills the whole page so a pinch works anywhere on screen, not only
+        // on top of the image.
+        child: SizedBox.expand(
+          child: InteractiveViewer(
+            transformationController: _transformationController,
+            minScale: _minScale,
+            maxScale: _maxScale,
+            onInteractionStart: (_) => _zoomAnimationController.stop(),
+            child: Center(child: widget.child),
+          ),
         ),
       ),
     );

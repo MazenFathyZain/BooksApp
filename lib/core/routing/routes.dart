@@ -8,4 +8,6 @@ class Routes {
   static const String pdf = '/pdf_reader';
   static const String favoriteBooksScreen = '/favoriteBooksScreen';
   static const String downloadedBooksScreen = '/downloadedBooksScreen';
+  static const String chatScreen = '/chatScreen';
+  static const String adminConversationsScreen = '/adminConversationsScreen';
 }

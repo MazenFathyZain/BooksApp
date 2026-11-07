@@ -9,6 +9,7 @@ import 'package:book/features/dashboard/logic/dashboard_cubit.dart';
 import 'package:book/features/favorite/data/apis/favorite_apis.dart';
 import 'package:book/features/favorite/data/repos/favorite_repo.dart';
 import 'package:book/features/favorite/logic/favorite_cubit.dart';
+import 'package:book/features/chat/data/chat_repo.dart';
 import 'package:book/features/home/data/apis/home_apis.dart';
 import 'package:book/features/home/data/repos/home_repo.dart';
 import 'package:book/features/home/logic/home_cubit.dart';
@@ -58,4 +59,7 @@ Future<void> setupGetIt() async {
   getIt.registerLazySingleton<FavoriteApis>(() => FavoriteApis(dio));
   getIt.registerLazySingleton<FavoriteRepo>(() => FavoriteRepo(getIt()));
   getIt.registerFactory<FavoriteCubit>(() => FavoriteCubit(getIt()));
+
+  // Support chat between users and the administration
+  getIt.registerLazySingleton<ChatRepo>(() => ChatRepo(dio));
 }

@@ -5,12 +5,30 @@ import '../helpers/shared_pref_helper.dart';
 import '../helpers/session_helper.dart';
 import '../routing/routes.dart';
 import '../theming/app_colors.dart';
+import '../di/dependency_injection.dart';
+import '../../features/chat/data/chat_repo.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
 
   Future<String?> checkIsLoggedIn() async {
     return await SharedPrefHelper.getSecuredString(AppConstants.userToken);
+  }
+
+  /// Unread support messages: user messages for admins, admin replies for
+  /// users. Zero for guests or when offline.
+  Future<int> getUnreadChatCount() async {
+    if (!isLoggedInUser) {
+      return 0;
+    }
+    try {
+      final repo = getIt<ChatRepo>();
+      return isAdmin
+          ? await repo.getAdminUnreadCount()
+          : await repo.getMyUnreadCount();
+    } catch (_) {
+      return 0;
+    }
   }
 
   Future<Map<String, String>> getUserData() async {
@@ -194,6 +212,69 @@ class AppDrawer extends StatelessWidget {
                   },
                 ),
                 const SizedBox(height: 8),
+                FutureBuilder<int>(
+                  future: getUnreadChatCount(),
+                  builder: (context, snapshot) {
+                    return _buildMenuItem(
+                      context: context,
+                      icon:
+                          isAdmin
+                              ? Icons.forum_outlined
+                              : Icons.support_agent_outlined,
+                      title: context.tr(
+                        isAdmin ? 'user_messages' : 'contact_admin',
+                      ),
+                      isDarkMode: isDarkMode,
+                      badgeCount: snapshot.data ?? 0,
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        if (isAdmin) {
+                          Navigator.pushNamed(
+                            context,
+                            Routes.adminConversationsScreen,
+                          );
+                          return;
+                        }
+                        if (!isLoggedInUser) {
+                          final shouldLogin = await showDialog<bool>(
+                            context: context,
+                            builder:
+                                (dialogContext) => AlertDialog(
+                                  title: Text(context.tr('login_required')),
+                                  content: Text(
+                                    context.tr('login_to_contact_admin'),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed:
+                                          () => Navigator.pop(
+                                            dialogContext,
+                                            false,
+                                          ),
+                                      child: Text(context.tr('cancel')),
+                                    ),
+                                    TextButton(
+                                      onPressed:
+                                          () => Navigator.pop(
+                                            dialogContext,
+                                            true,
+                                          ),
+                                      child: Text(context.tr('login')),
+                                    ),
+                                  ],
+                                ),
+                          );
+                          if (shouldLogin == true && context.mounted) {
+                            Navigator.pushNamed(context, Routes.loginScreen);
+                          }
+                          return;
+                        }
+                        Navigator.pushNamed(context, Routes.chatScreen);
+                      },
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
                 _buildMenuItem(
                   context: context,
                   icon: Icons.settings_outlined,
@@ -316,6 +397,7 @@ class AppDrawer extends StatelessWidget {
     required VoidCallback onTap,
     required bool isDarkMode,
     Color? iconColor,
+    int badgeCount = 0,
   }) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -340,10 +422,23 @@ class AppDrawer extends StatelessWidget {
             color: isDarkMode ? Colors.white : AppColors.textPrimary,
           ),
         ),
-        trailing: Icon(
-          Icons.arrow_forward_ios,
-          size: 16,
-          color: isDarkMode ? Colors.grey[400] : Colors.grey[400],
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (badgeCount > 0)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(end: 8),
+                child: Badge(
+                  label: Text(badgeCount > 99 ? '99+' : '$badgeCount'),
+                  backgroundColor: AppColors.error,
+                ),
+              ),
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 16,
+              color: isDarkMode ? Colors.grey[400] : Colors.grey[400],
+            ),
+          ],
         ),
         onTap: onTap,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
